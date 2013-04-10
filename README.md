@@ -1,22 +1,22 @@
 SmartyBigPipe
 =============
 
-*Unfinished*
-*未完成*
+*Unfinished*  
+*未完成*  
 
-An implementation of BigPipe for the Smarty.
-一种BigPipe的Smarty实现
+An implementation of BigPipe for the Smarty.  
+一种BigPipe的Smarty实现  
 
 ``` smarty
-{ajax_html}
-	{ajax_head}
-		{ajax_title}Hello BigPipe{/ajax_title}
-	{/ajax_head}
-	{ajax_body}
-		{ajax_block}
+{html}
+	{head}
+		{title}Hello BigPipe{/title}
+	{/head}
+	{body}
+		{pagelet}
 			I'm the bigpipe content
-		{/ajax_block}
-	{/ajax_body}
-{/ajax_html}
+		{/pagelet}
+	{/body}
+{/html}
 ```
 

@@ -101,7 +101,7 @@ class NoScriptController extends PageController
         case BigPipe::BODY:
             $keys[]="body";
             break;
-        case BigPipe::BLOCK:
+        case BigPipe::PAGELET:
             $keys[]="block";
             break;
         case BigPipe::SCRIPT:

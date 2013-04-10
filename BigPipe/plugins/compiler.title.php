@@ -1,14 +1,14 @@
 <?php
 /** 
- *           File:  compiler.ajax_script.php
- *           Path:  ~/workspace/ting/project/tool/libs/xAjax/plugins
+ *           File:  compiler.title.php
+ *           Path:  ~/public_html/hao123/libs/BigPipe/plugins
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
- *       Modified:  2011-09-08 11:09:47  
+ *       Modified:  2013-04-10 18:14:53  
  *    Description:  页面分块输出基本单位 
  *      Copyright:  (c) 2011 All Rights Reserved
  */
-function smarty_compiler_ajax_title($params,  $smarty){
+function smarty_compiler_title($params,  $smarty){
 	$uniqid = BigPipe::compileUniqid();
 	return 
 '<?php '.
@@ -17,7 +17,7 @@ function smarty_compiler_ajax_title($params,  $smarty){
 '?>';
 }
 
-function smarty_compiler_ajax_titleclose($params,  $smarty){
+function smarty_compiler_titleclose($params,  $smarty){
 	return 
 '<?php '.
 '}'.

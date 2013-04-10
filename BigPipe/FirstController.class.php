@@ -8,7 +8,7 @@
  *    Description: 第一次请求页面时的输出控制器 
  *    共分为3个阶段输出:
  *
- *    1.渲染并收集最外层结构(未被ajax_block包裹的内容)并收集使用到的Js和CSS
+ *    1.渲染并收集最外层结构(未被pagelet包裹的内容)并收集使用到的Js和CSS
  *    2.输出html、head、body和最外层结构，并且输出前端库及使用到的CSS和Js资源
  *    3.根据优先级输出各层结构，并输出依赖资源表
  *    4.结束
@@ -24,6 +24,7 @@ class FirstController extends PageController
     
 	private $state=self::STAT_COLLECT_LAYOUT; //初始状态
 	private $layoutHTML=null;      //布局结构
+	private $layoutStyles=null;    //布局所用到的样式
     private $layoutPriority=null;  //布局的优先级
     private $priorityList=null;    //优先级数组
     private $currentPriority=null; //当前优先级
@@ -42,7 +43,7 @@ class FirstController extends PageController
 			//收集阶段
 			'collect_body_open'    => array('startCollect', true),
 			'collect_body_close'   => array('collectLayout'),
-			'collect_block_open'   => array('outputPlaceHolder', 'setBlockPriority', false),
+			'collect_pagelet_open' => array('outputPlaceHolder', 'setPageletPriority', false),
 			'collect_script_open'  => array('startCollect', true),
 			'collect_script_close' => array('collectScript'),
 			'collect_more'         => array('changeState', true),
@@ -51,13 +52,14 @@ class FirstController extends PageController
 			'layout_head_open'     => array('outputOpenTag', 'outputNoscriptFallback', true),
 			'layout_title_open'    => array('outputOpenTag', true),
 			'layout_title_close'   => array('outputCloseTag'),
-			'layout_head_close'    => array('outputCloseTag'),
+			'layout_head_close'    => array('outputLayoutStyle', 'outputCloseTag'),
 			'layout_body_open'     => array('outputOpenTag', 'outputLayout', false),
+			'layout_body_close'    => array('outputBigPipeLibrary'/*, 'outputLayoutScript'*/),
 			'layout_more'          => array('changeState', true),
 			//输出内容阶段
 			'content_body_open'    => array('setCurrentPriority', false),
-			'content_block_open'   => array('blockOpen'),
-			'content_block_close'  => array('blockClose'),
+			'content_pagelet_open' => array('pageletOpen'),
+			'content_pagelet_close'=> array('pageletClose'),
 			'content_script_open'  => array('startCollect', true),
 			'content_script_close' => array('collectScript'),
 			'content_more'         => array('changeState', true),
@@ -82,6 +84,7 @@ class FirstController extends PageController
 			$this,
 			'filterPriority'
 		));
+		$this->layoutStyles=$context->styles;
 	} // }}}
 
 	/**
@@ -93,12 +96,12 @@ class FirstController extends PageController
 	 */
 	protected function outputPlaceHolder($context){
         if($context->parent->opened) { // 如果父级标签处于输出状态，则输出最外层节点
-			$this->outputBlockOpenTag($context);
+			$this->outputPageletOpenTag($context);
 			$this->outputCloseTag($context);
 		}
 	} // }}}
 
-	protected function outputBlockOpenTag($context){
+	protected function outputPageletOpenTag($context){
 		if(!isset($context->config["id"]))
 			$context->config["id"] = $this->sessionUniqId("__elm_");
 		$this->outputOpenTag($context);
@@ -144,16 +147,42 @@ class FirstController extends PageController
 	} // }}}
 
 	/**
-	 * blockOpen 
+	 * outputLayoutStyle 输出布局所用到的Css {{{
 	 * 
 	 * @param mixed $context 
 	 * @access protected
 	 * @return void
 	 */
-	protected function blockOpen($context){
+	protected function outputLayoutStyle($context){
+		foreach($this->getDependURLs($this->layoutStyles) as $link){
+			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$link\" />\n";
+		}
+	} // }}}
+
+	/**
+	 * outputBigPipeLibrary 输出框架代码 {{{
+	 * 
+	 * @param mixed $context 
+	 * @access protected
+	 * @return void
+	 */
+	protected function outputBigPipeLibrary($context){
+		foreach($this->getDependURLs(array(BigPipe::$jsLib)) as $src){
+			echo "<script type=\"text/javascript\" src=\"$src\"></script>\n";
+		}
+	} // }}}
+
+	/**
+	 * pageletOpen 
+	 * 
+	 * @param mixed $context 
+	 * @access protected
+	 * @return void
+	 */
+	protected function pageletOpen($context){
 		$ret = false;
 		if($context->parent->opened) {
-			$this->outputBlockOpenTag($context);
+			$this->outputPageletOpenTag($context);
 		}
         
 		if($this->currentPriority===$context->priority) {
@@ -166,18 +195,19 @@ class FirstController extends PageController
 	}
 
 	/**
-	 * blockClose 
+	 * pageletClose 
 	 * 
 	 * @param mixed $context 
 	 * @access protected
 	 * @return void
 	 */
-	protected function blockClose($context){
+	protected function pageletClose($context){
 		if($context->opened) {
 			echo "--></code>\n";
 			//echo "/*]]>*/</script>\n";
 			$id=$context->get(self::HTML_CONTAINER_ID);
 			echo "<script>var a=(a+100)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;},a);</script>\n";
+			//echo "<script>document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;</script>\n";
 			//var_dump($context->scripts);
 		}
 		
@@ -273,8 +303,8 @@ class FirstController extends PageController
 	   case BigPipe::BODY:
 	       $keys[]="body";
 	       break;
-	   case BigPipe::BLOCK:
-	       $keys[]="block";
+	   case BigPipe::PAGELET:
+	       $keys[]="pagelet";
 	       break;
 	   case BigPipe::SCRIPT:
 	       $keys[]="script";

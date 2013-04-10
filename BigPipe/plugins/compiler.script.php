@@ -1,14 +1,14 @@
 <?php
 /** 
- *           File:  plugins/compiler.ajax_script.php
+ *           File:  compiler.script.php
  *           Path:  ~/public_html/hao123/libs/BigPipe/plugins
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
- *       Modified:  2013-03-28 18:58:47  
+ *       Modified:  2013-04-10 18:14:48  
  *    Description:  页面分块输出基本单位 
  *      Copyright:  (c) 2011 All Rights Reserved
  */
-function smarty_compiler_ajax_script($params,  $smarty){
+function smarty_compiler_script($params,  $smarty){
 	$uniqid = BigPipe::compileUniqid();
 	return
 '<?php '.
@@ -16,7 +16,7 @@ function smarty_compiler_ajax_script($params,  $smarty){
 '?>';
 }
 
-function smarty_compiler_ajax_scriptclose($params,  $smarty){
+function smarty_compiler_scriptclose($params,  $smarty){
 	return
 '<?php '.
 '}'.

@@ -1,14 +1,14 @@
 <?php
 /** 
- *           File:  compiler.ajax_body.php
- *           Path:  src/libs/Ajax/plugins
+ *           File:  compiler.body.php
+ *           Path:  ~/public_html/hao123/libs/BigPipe/plugins
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
- *       Modified:  2012-07-20 23:47:49  
+ *       Modified:  2013-04-10 18:13:45  
  *    Description:  页面body标记
  *      Copyright:  (c) 2011 All Rights Reserved
  */
-function smarty_compiler_ajax_body($params,  $smarty){
+function smarty_compiler_body($params,  $smarty){
 	$uniqid = BigPipe::compileUniqid();
 	return 
 '<?php '.
@@ -17,7 +17,7 @@ function smarty_compiler_ajax_body($params,  $smarty){
 '?>';
 }
 
-function smarty_compiler_ajax_bodyclose($params,  $smarty){
+function smarty_compiler_bodyclose($params,  $smarty){
 	return 
 '<?php '.
 '}'.

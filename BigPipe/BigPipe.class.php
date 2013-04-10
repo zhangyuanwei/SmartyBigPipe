@@ -21,7 +21,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
     const HEAD=2;
     const TITLE=3;
     const BODY=4;
-    const BLOCK=5;
+    const PAGELET=5;
     const SCRIPT=6;
     
     const STAT_UNINIT=0;
@@ -34,7 +34,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
     protected static $ajaxKey='__ajax__';
     protected static $sessionKey='__session__';
     protected static $nojsKey='__noscript__';
-    protected static $jsLib='/common/js/boot.js';
+    protected static $jsLib='/BigPipe/javascript/bootloader.js';
     protected static $separator=' ';
     
     private static $state=self::STAT_UNINIT; // 当前状态
@@ -167,7 +167,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
             self::$nojsKey=$config[$key];
         }
         
-        $key=self::getAttrKey('boot-uri');
+        $key=self::getAttrKey('jslib');
         if(isset($config[$key])) {
             self::$jsLib=$config[$key];
         }
@@ -251,8 +251,8 @@ abstract class PageController extends BigPipe // {{{
     const ACTION_OPEN=1;
     const ACTION_CLOSE=2;
     const ACTION_MORE=3;
-	
-	const DEFAULT_PRIORITY=0;                    //默认优先级
+    
+    const DEFAULT_PRIORITY=0; //默认优先级
     
     protected $actionChain=null;
     
@@ -299,7 +299,7 @@ abstract class PageController extends BigPipe // {{{
     {
         return $this->doAction($this->getActionKey(BigPipe::NONE, self::ACTION_MORE), null);
     } // }}}
- 
+    
     /**
      * outputOpenTag 输出打开标签 {{{
      * 
@@ -308,7 +308,7 @@ abstract class PageController extends BigPipe // {{{
      * @return void
      */
     protected function outputOpenTag($context)
-	{
+    {
         $context->outputOpen();
     } // }}}
     
@@ -323,39 +323,87 @@ abstract class PageController extends BigPipe // {{{
     {
         $context->outputClose();
     } // }}}
-   
-	/**
-	 * startCollect 开始收集内容 {{{
-	 * 
-	 * @param mixed $context 
-	 * @access protected
-	 * @return void
-	 */
-	protected function startCollect($context){
-		ob_start();
-	} // }}}
+    
+    /**
+     * startCollect 开始收集内容 {{{
+     * 
+     * @param mixed $context 
+     * @access protected
+     * @return void
+     */
+    protected function startCollect($context)
+    {
+        ob_start();
+    } // }}}
+    
+    /**
+     * collectScript 收集脚本 {{{
+     * 
+     * @param mixed $context 
+     * @access protected
+     * @return void
+     */
+    protected function collectScript($context)
+    {
+        $context->parent->addScript(ob_get_clean(), $context->getBigPipeConfig("runtime", "onload"));
+    } // }}}
+    
+    /**
+     * setPageletPriority 设置优先级 {{{
+     * 
+     * @param mixed $context 
+     * @access protected
+     * @return void
+     */
+    protected function setPageletPriority($context)
+    {
+        $context->setPriority($context->getBigPipeConfig("priority", self::DEFAULT_PRIORITY));
+    } // }}}
 
-	/**
-	 * collectScript 收集脚本 {{{
-	 * 
-	 * @param mixed $context 
-	 * @access protected
-	 * @return void
-	 */
-	protected function collectScript($context){
-		$context->parent->addScript(ob_get_clean(), $context->getBigPipeConfig("runtime", "onload"));
-	} // }}}
+    /**
+     * getDependURLs 得到一组资源的依赖URL {{{
+     * 
+     * @param mixed $pathList 
+     * @access protected
+     * @return void
+     */
+    protected function getDependURLs($pathList)
+    {
+        $requires=array();
+        $depends=array();
+		$ids=array();
+        foreach($pathList as $path) {
+            array_unshift($requires, Resource::getResource($path));
+        }
+        
+        while(!empty($requires)) {
+            $res=end($requires);
+            $id=$res->getId();
+            
+            if(isset($ids[$id])) {
+                array_pop($requires);
+                continue;
+            }
+            
+            $more=false; // 是否有未填加的依赖资源
+            foreach($res->getDepends() as $dep) {
+                $did=$dep->getId();
+                if(!isset($ids[$did])) {
+                    $requires[]=$dep;
+                    $more=true;
+                }
+            }
+            
+			if($more) {
 
-	/**
-	 * setBlockPriority 设置优先级 {{{
-	 * 
-	 * @param mixed $context 
-	 * @access protected
-	 * @return void
-	 */
-	protected function setBlockPriority($context){
-		$context->setPriority($context->getBigPipeConfig("priority", self::DEFAULT_PRIORITY));
-	} // }}}
+			}else{
+                $depends[]=$res->getURL();
+                $ids[$id]=true;
+                array_pop($requires);
+            }
+        }
+        return $depends;
+    } // }}}
 } // }}}
 
 class BigPipeContext // BigPipe上下文 {{{ 
@@ -374,6 +422,7 @@ class BigPipeContext // BigPipe上下文 {{{
     
     public $priority=-1;
     public $scripts=null;
+    public $styles=null;
     
     public function __construct($type, $config=null)
     {
@@ -381,6 +430,7 @@ class BigPipeContext // BigPipe上下文 {{{
         $this->config=$config;
         $this->children=array();
         $this->scripts=array();
+        $this->styles=array();
         
         $this->vars=array();
     }
@@ -409,6 +459,11 @@ class BigPipeContext // BigPipe上下文 {{{
             $this->scripts[$type]=array();
         }
         $this->scripts[$type][]=$content;
+    }
+    
+    public function addStyleLink($link)
+    {
+        $this->styles[]=$link;
     }
     
     public function getBigPipeConfig($key, $default=null)
@@ -456,7 +511,7 @@ class BigPipeContext // BigPipe上下文 {{{
             return 'body';
         case BigPipe::SCRIPT:
             return 'script';
-        case BigPipe::BLOCK:
+        case BigPipe::PAGELET:
             return $this->getBigPipeConfig("tag", "div");
         default:
         }
