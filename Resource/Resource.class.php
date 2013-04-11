@@ -17,8 +17,9 @@ abstract class Resource
     private static $resourceHandlers=null; //处理器表
     private static $resourcesMap=array(); //资源映射表
     private static $idChars=null; //id可用的字符
+    private static $filters=array(); //过滤器
     
-    protected $path=null; //资源路径
+    private $path=null; //资源路径
     private $content=null; //输出内容
     private $depends=array(); //依赖资源列表
     private $id=null; //资源ID
@@ -50,6 +51,26 @@ abstract class Resource
     } // }}}
     
     /**
+     * registerFilter 注册过滤器 {{{
+     * 
+     * @param mixed $type 
+     * @param mixed $callback 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function registerFilter($type, $callback)
+    {
+        if(isset(self::$filters[$type])) {
+            self::$filters[$type][]=$callback;
+        } else {
+            self::$filters[$type]=array(
+                $callback
+            );
+        }
+    } // }}}
+    
+    /**
      * getResource 得到资源 {{{
      * 
      * @param mixed $path 
@@ -75,6 +96,19 @@ abstract class Resource
             }
         }
         throw new Exception("No handler for path \"$path\"");
+    } // }}}
+    
+    /**
+     * exists 资源是否存在 {{{
+     * 
+     * @param mixed $path 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function hasResource($path)
+    {
+        return self::getResource($path)->exists();
     } // }}}
     
     /**
@@ -125,6 +159,11 @@ abstract class Resource
         }
     } // }}}
     // }}}
+    
+    public function getPath()
+    {
+        return $this->path;
+    }
     
     public function getId()
     {
@@ -187,7 +226,7 @@ abstract class Resource
             } elseif($entry==="..") {
                 if(!empty($path)) {
                     array_pop($path);
-				}
+                }
             } elseif($entry==='') {
                 continue;
             } else {
@@ -222,6 +261,11 @@ abstract class Resource
         }
     }
     
+    protected function exists()
+    {
+        return $this->getFilePath() !== false;
+    }
+    
     /**
      * depend 依赖文件 {{{
      * 
@@ -235,7 +279,25 @@ abstract class Resource
         $this->depends[$res->getId()]=$res;
     } // }}}
     
-    abstract protected function genContent();
+    protected function genContent()
+    {
+        if($file=$this->getFilePath()) {
+            $content=file_get_contents($file);
+            $type='pre';
+            if(!empty(self::$filters[$type])) {
+                foreach(self::$filters[$type] as $key=>$name) {
+                    if(is_array(self::$filters[$type][$key])) {
+                        $content=call_user_func(self::$filters[$type][$key], $content, $this);
+                    } else {
+                        $content=self::$filters[$type][$key]($content, $this);
+                    }
+                }
+            }
+            return $content;
+        } else {
+            throw new Exception("Resource \"$this->path\" not found.");
+        }
+    }
 }
 // vim600: sw=4 ts=4 fdm=marker syn=php
 

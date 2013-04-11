@@ -24,8 +24,9 @@ class FirstController extends PageController
     
 	private $state=self::STAT_COLLECT_LAYOUT; //初始状态
 	private $layoutHTML=null;      //布局结构
+	private $layoutStyleLinks=null;//布局所用到的样式链接
 	private $layoutStyles=null;    //布局所用到的样式
-    private $layoutPriority=null;  //布局的优先级
+
     private $priorityList=null;    //优先级数组
     private $currentPriority=null; //当前优先级
     private $sessionId=0;          //此次会话ID,用于自动生成不重复id,第一次默认为0
@@ -44,8 +45,6 @@ class FirstController extends PageController
 			'collect_body_open'    => array('startCollect', true),
 			'collect_body_close'   => array('collectLayout'),
 			'collect_pagelet_open' => array('outputPlaceHolder', 'setPageletPriority', false),
-			'collect_script_open'  => array('startCollect', true),
-			'collect_script_close' => array('collectScript'),
 			'collect_more'         => array('changeState', true),
 			//输出布局阶段
 			'layout_html_open'     => array('outputOpenTag', true),
@@ -60,8 +59,6 @@ class FirstController extends PageController
 			'content_body_open'    => array('setCurrentPriority', false),
 			'content_pagelet_open' => array('pageletOpen'),
 			'content_pagelet_close'=> array('pageletClose'),
-			'content_script_open'  => array('startCollect', true),
-			'content_script_close' => array('collectScript'),
 			'content_more'         => array('changeState', true),
 			//输出结束标签
 			'end_body_close'       => array('outputCloseTag'),
@@ -79,11 +76,8 @@ class FirstController extends PageController
 	 */
 	protected function collectLayout($context){
 		$this->layoutHTML=ob_get_clean();
-		$this->layoutPriority=$context->priority;
-		$this->priorityList=array_filter(BigPipeContext::uniquePriority(), array(
-			$this,
-			'filterPriority'
-		));
+		$this->priorityList=BigPipeContext::uniquePriority();
+		$this->layoutStyleLinks=$context->styleLinks;
 		$this->layoutStyles=$context->styles;
 	} // }}}
 
@@ -142,7 +136,6 @@ class FirstController extends PageController
 	 * @return void
 	 */
 	protected function setCurrentPriority(){
-		//var_dump($this->priorityList);
 		$this->currentPriority=array_pop($this->priorityList);
 	} // }}}
 
@@ -154,8 +147,19 @@ class FirstController extends PageController
 	 * @return void
 	 */
 	protected function outputLayoutStyle($context){
-		foreach($this->getDependURLs($this->layoutStyles) as $link){
-			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$link\" />\n";
+		$this->layoutStyleLinks = array_merge($context->styleLinks, $this->layoutStyleLinks);
+		$this->layoutStyles = array_merge($context->styles, $this->layoutStyles);
+
+		foreach($this->getDependURLs($this->layoutStyleLinks) as $link){
+			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$link\" />";
+		}
+
+		if(!empty($this->layoutStyles)){
+			echo "<style type=\"text/css\">";
+			foreach($this->layoutStyles as $style){
+				echo $style, "\n";
+			}
+			echo "</style>";
 		}
 	} // }}}
 
@@ -168,8 +172,9 @@ class FirstController extends PageController
 	 */
 	protected function outputBigPipeLibrary($context){
 		foreach($this->getDependURLs(array(BigPipe::$jsLib)) as $src){
-			echo "<script type=\"text/javascript\" src=\"$src\"></script>\n";
+			echo "<script src=\"$src\"></script>";
 		}
+		echo "<script type=\"text/javascript\">Bootloader=require(\"Bootloader\");</script>";
 	} // }}}
 
 	/**
@@ -184,8 +189,7 @@ class FirstController extends PageController
 		if($context->parent->opened) {
 			$this->outputPageletOpenTag($context);
 		}
-        
-		if($this->currentPriority===$context->priority) {
+		if($this->currentPriority===$context->getPriority()) {
 			$id=$context->set(self::HTML_CONTAINER_ID, $this->sessionUniqId("__cnt_"));
 			echo "<code id=\"$id\"><!--";
 			//echo "<sctipt id=\"$id\" type=\"text/html\">/*<![CDATA[*/";
@@ -203,12 +207,11 @@ class FirstController extends PageController
 	 */
 	protected function pageletClose($context){
 		if($context->opened) {
-			echo "--></code>\n";
+			echo "--></code>";
 			//echo "/*]]>*/</script>\n";
 			$id=$context->get(self::HTML_CONTAINER_ID);
-			echo "<script>var a=(a+100)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;},a);</script>\n";
+			echo "<script>var a=(a+50)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;},a);</script>\n";
 			//echo "<script>document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;</script>\n";
-			//var_dump($context->scripts);
 		}
 		
 		if($context->parent->opened) {
@@ -306,9 +309,6 @@ class FirstController extends PageController
 	   case BigPipe::PAGELET:
 	       $keys[]="pagelet";
 	       break;
-	   case BigPipe::SCRIPT:
-	       $keys[]="script";
-	       break;
 	   default:
 	   }
         
@@ -348,16 +348,6 @@ class FirstController extends PageController
         //sessionKey
     } // }}}
 
-	/**
-     * filterPriority {{{
-     * 
-     * @param mixed $value 
-     * @access private
-     * @return void
-     */
-    private function filterPriority($value){
-        return $value < $this->layoutPriority;
-    } // }}}
 }
 
 // vim600: sw=4 ts=4 fdm=marker syn=php

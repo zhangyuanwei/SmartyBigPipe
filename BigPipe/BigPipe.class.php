@@ -23,6 +23,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
     const BODY=4;
     const PAGELET=5;
     const SCRIPT=6;
+    const LINK=7;
     
     const STAT_UNINIT=0;
     const STAT_FIRST=1;
@@ -77,6 +78,10 @@ abstract class BigPipe // BigPipe 流控制 {{{
         }
     }
     // }}}
+    public static function getContext() // 得到当前上下文 {{{
+    {
+        return self::$context;
+    } // }}}
     // {{{ Smarty编译辅助函数
     public static final function compileParamsArray($params)
     {
@@ -194,6 +199,12 @@ abstract class BigPipe // BigPipe 流控制 {{{
     }
     //}}}
     
+    public static final function tag($type, $config, $uniqid) // 自闭合标签{{{
+    {
+        self::open($type, $config, $uniqid);
+        self::close($type, $config, $uniqid);
+    } // }}}
+    
     public static final function open($type, $config, $uniqid) // {{{ 打开某个标签
     {
         assert('self::$state === self::STAT_FIRST || self::$state === self::STAT_LOOP');
@@ -252,7 +263,7 @@ abstract class PageController extends BigPipe // {{{
     const ACTION_CLOSE=2;
     const ACTION_MORE=3;
     
-    const DEFAULT_PRIORITY=0; //默认优先级
+    const DEFAULT_PRIORITY=":"; //默认优先级
     
     protected $actionChain=null;
     
@@ -287,12 +298,41 @@ abstract class PageController extends BigPipe // {{{
     
     protected final function openTag($context) // {{{
     {
-        return $this->doAction($this->getActionKey($context->type, self::ACTION_OPEN), $context);
+        switch($context->type) {
+        case BigPipe::SCRIPT:
+            $src=$context->getConfig("src");
+            if($src===null) { // 没有src属性，收集内容
+                $this->startCollect($context);
+                return true;
+            } else {
+                $context->parent->addScriptLink($src);
+                return false;
+            }
+        case BigPipe::LINK:
+            assert('$context->getConfig("rel") === "stylesheet"');
+            assert('$context->getConfig("type", "text/css") === "text/css"');
+            $href=$context->getConfig("href");
+            $context->parent->addStyleLink($href);
+            return false;
+        default:
+            return $this->doAction($this->getActionKey($context->type, self::ACTION_OPEN), $context);
+        }
     } // }}}
     
     protected final function closeTag($context) // {{{
     {
-        return $this->doAction($this->getActionKey($context->type, self::ACTION_CLOSE), $context);
+        switch($context->type) {
+        case BigPipe::SCRIPT:
+            if($context->opened) {
+                $this->collectScript($context);
+            }
+            break;
+        case BigPipe::LINK:
+            //do nothing
+            break;
+        default:
+            $this->doAction($this->getActionKey($context->type, self::ACTION_CLOSE), $context);
+        }
     } // }}}
     
     protected final function hasMore() // {{{
@@ -309,7 +349,7 @@ abstract class PageController extends BigPipe // {{{
      */
     protected function outputOpenTag($context)
     {
-        $context->outputOpen();
+        echo $context->getOpenHTML();
     } // }}}
     
     /**
@@ -321,7 +361,7 @@ abstract class PageController extends BigPipe // {{{
      */
     protected function outputCloseTag($context)
     {
-        $context->outputClose();
+        echo $context->getCloseHTML();
     } // }}}
     
     /**
@@ -356,10 +396,16 @@ abstract class PageController extends BigPipe // {{{
      * @return void
      */
     protected function setPageletPriority($context)
-    {
-        $context->setPriority($context->getBigPipeConfig("priority", self::DEFAULT_PRIORITY));
+	{
+		$priority = $context->getBigPipeConfig("priority");
+		if($priority === null){
+			$priority = self::DEFAULT_PRIORITY;
+		}else{
+			$priority = intval($priority);
+		}
+        $context->setPriority($priority);
     } // }}}
-
+    
     /**
      * getDependURLs 得到一组资源的依赖URL {{{
      * 
@@ -371,7 +417,7 @@ abstract class PageController extends BigPipe // {{{
     {
         $requires=array();
         $depends=array();
-		$ids=array();
+        $ids=array();
         foreach($pathList as $path) {
             array_unshift($requires, Resource::getResource($path));
         }
@@ -394,9 +440,9 @@ abstract class PageController extends BigPipe // {{{
                 }
             }
             
-			if($more) {
-
-			}else{
+            if($more) {
+                
+            } else {
                 $depends[]=$res->getURL();
                 $ids[$id]=true;
                 array_pop($requires);
@@ -408,7 +454,8 @@ abstract class PageController extends BigPipe // {{{
 
 class BigPipeContext // BigPipe上下文 {{{ 
 {
-    private static $priority_list=array();
+	private static $priority_list=array();
+	private static $max_priority=0;
     
     private $vars=null;
     
@@ -420,9 +467,12 @@ class BigPipeContext // BigPipe上下文 {{{
     public $children=null;
     public $opened=false;
     
-    public $priority=-1;
-    public $scripts=null;
-    public $styles=null;
+    public $priority=null; // 输出优先级
+    public $priorityArray=null; //输出数组
+    public $scripts=null; // script内容
+    public $scriptLinks=null; // js 链接
+    public $styles=null; // style内容
+    public $styleLinks=null; // css 链接
     
     public function __construct($type, $config=null)
     {
@@ -430,28 +480,53 @@ class BigPipeContext // BigPipe上下文 {{{
         $this->config=$config;
         $this->children=array();
         $this->scripts=array();
+        $this->scriptLinks=array();
         $this->styles=array();
+        $this->styleLinks=array();
         
         $this->vars=array();
     }
     
+    private static function getPriorityString($arr)
+	{
+		$str = array();
+		foreach($arr as $pri){
+			$str[] = str_pad($pri, self::$max_priority, '0', STR_PAD_LEFT);
+		}
+		$str = implode('/', $str) . ".";
+		return $str;
+    }
+    
     public static function uniquePriority()
-    {
-        self::$priority_list=array_unique(self::$priority_list);
-        asort(self::$priority_list, SORT_NUMERIC);
-        return self::$priority_list;
+	{
+		$list = array();
+		foreach(self::$priority_list as $arr){
+			$list[] = self::getPriorityString($arr);
+		}
+		$list = array_unique($list, SORT_STRING);
+		rsort($list, SORT_STRING);
+        return $list;
     }
     
     public function setPriority($priority)
     {
-        if($priority>$this->priority) {
-            $this->priority=$priority;
-            if(isset($this->parent)) {
-                $this->parent->setPriority($priority+1);
-            }
-            self::$priority_list[]=$priority;
+        if($this->parent!==null&&$this->parent->priorityArray!==null) {
+            $priorityArray=$this->parent->priorityArray;
+        } else {
+            $priorityArray=array();
         }
-    }
+		$priorityArray[]=$priority;
+        $this->priorityArray=$priorityArray;
+		self::$priority_list[]=$this->priorityArray;
+		self::$max_priority=max(self::$max_priority, strlen($priority));
+	}
+
+	public function getPriority(){
+		if($this->priority === null){
+			$this->priority = self::getPriorityString($this->priorityArray);
+		}
+        return $this->priority;
+	}
     
     public function addScript($content, $type)
     {
@@ -461,9 +536,19 @@ class BigPipeContext // BigPipe上下文 {{{
         $this->scripts[$type][]=$content;
     }
     
+    public function addScriptLink($link)
+    {
+        $this->scriptLinks[]=$link;
+    }
+    
+    public function addStyle($content)
+    {
+        $this->styles[]=$content;
+    }
+    
     public function addStyleLink($link)
     {
-        $this->styles[]=$link;
+        $this->styleLinks[]=$link;
     }
     
     public function getBigPipeConfig($key, $default=null)
@@ -511,13 +596,15 @@ class BigPipeContext // BigPipe上下文 {{{
             return 'body';
         case BigPipe::SCRIPT:
             return 'script';
+        case BigPipe::LINK:
+            return 'link';
         case BigPipe::PAGELET:
             return $this->getBigPipeConfig("tag", "div");
         default:
         }
     }
     
-    public function outputOpen($params=null)
+    public function getOpenHTML($params=null)
     {
         $text='<' . $this->getTagName();
         if($params!==false) {
@@ -530,12 +617,12 @@ class BigPipeContext // BigPipe上下文 {{{
             }
         }
         $text.='>';
-        echo $text;
+        return $text;
     }
     
-    public function outputClose()
+    public function getCloseHTML()
     {
-        echo '</' . $this->getTagName() . '>';
+        return '</' . $this->getTagName() . '>';
     }
 } // }}}
 
