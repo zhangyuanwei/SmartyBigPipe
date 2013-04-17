@@ -36,6 +36,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
     protected static $sessionKey='__session__';
     protected static $nojsKey='__noscript__';
     protected static $jsLib='/BigPipe/javascript/bootloader.js';
+    protected static $globalVar='bigPipe';
     protected static $separator=' ';
     
     private static $state=self::STAT_UNINIT; // 当前状态
@@ -177,6 +178,11 @@ abstract class BigPipe // BigPipe 流控制 {{{
             self::$jsLib=$config[$key];
         }
         
+        $key=self::getAttrKey('var');
+        if(isset($config[$key])) {
+            self::$globalVar=$config[$key];
+        }
+        
         self::$controller=self::getController();
         self::$state=self::STAT_FIRST;
         
@@ -202,7 +208,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
     public static final function tag($type, $config, $uniqid) // 自闭合标签{{{
     {
         self::open($type, $config, $uniqid);
-        self::close($type, $config, $uniqid);
+        self::close($type);
     } // }}}
     
     public static final function open($type, $config, $uniqid) // {{{ 打开某个标签
@@ -396,13 +402,13 @@ abstract class PageController extends BigPipe // {{{
      * @return void
      */
     protected function setPageletPriority($context)
-	{
-		$priority = $context->getBigPipeConfig("priority");
-		if($priority === null){
-			$priority = self::DEFAULT_PRIORITY;
-		}else{
-			$priority = intval($priority);
-		}
+    {
+        $priority=$context->getBigPipeConfig("priority");
+        if($priority===null) {
+            $priority=self::DEFAULT_PRIORITY;
+        } else {
+            $priority=intval($priority);
+        }
         $context->setPriority($priority);
     } // }}}
     
@@ -414,48 +420,15 @@ abstract class PageController extends BigPipe // {{{
      * @return void
      */
     protected function getDependURLs($pathList)
-    {
-        $requires=array();
-        $depends=array();
-        $ids=array();
-        foreach($pathList as $path) {
-            array_unshift($requires, Resource::getResource($path));
-        }
-        
-        while(!empty($requires)) {
-            $res=end($requires);
-            $id=$res->getId();
-            
-            if(isset($ids[$id])) {
-                array_pop($requires);
-                continue;
-            }
-            
-            $more=false; // 是否有未填加的依赖资源
-            foreach($res->getDepends() as $dep) {
-                $did=$dep->getId();
-                if(!isset($ids[$did])) {
-                    $requires[]=$dep;
-                    $more=true;
-                }
-            }
-            
-            if($more) {
-                
-            } else {
-                $depends[]=$res->getURL();
-                $ids[$id]=true;
-                array_pop($requires);
-            }
-        }
-        return $depends;
+	{
+
     } // }}}
 } // }}}
 
 class BigPipeContext // BigPipe上下文 {{{ 
 {
-	private static $priority_list=array();
-	private static $max_priority=0;
+    private static $priority_list=array();
+    private static $max_priority=0;
     
     private $vars=null;
     
@@ -488,23 +461,23 @@ class BigPipeContext // BigPipe上下文 {{{
     }
     
     private static function getPriorityString($arr)
-	{
-		$str = array();
-		foreach($arr as $pri){
-			$str[] = str_pad($pri, self::$max_priority, '0', STR_PAD_LEFT);
-		}
-		$str = implode('/', $str) . ".";
-		return $str;
+    {
+        $str=array();
+        foreach($arr as $pri) {
+            $str[]=str_pad($pri, self::$max_priority, '0', STR_PAD_LEFT);
+        }
+        $str=implode('/', $str) . ".";
+        return $str;
     }
     
     public static function uniquePriority()
-	{
-		$list = array();
-		foreach(self::$priority_list as $arr){
-			$list[] = self::getPriorityString($arr);
-		}
-		$list = array_unique($list, SORT_STRING);
-		rsort($list, SORT_STRING);
+    {
+        $list=array();
+        foreach(self::$priority_list as $arr) {
+            $list[]=self::getPriorityString($arr);
+        }
+        $list=array_unique($list, SORT_STRING);
+        rsort($list, SORT_STRING);
         return $list;
     }
     
@@ -515,18 +488,19 @@ class BigPipeContext // BigPipe上下文 {{{
         } else {
             $priorityArray=array();
         }
-		$priorityArray[]=$priority;
+        $priorityArray[]=$priority;
         $this->priorityArray=$priorityArray;
-		self::$priority_list[]=$this->priorityArray;
-		self::$max_priority=max(self::$max_priority, strlen($priority));
-	}
-
-	public function getPriority(){
-		if($this->priority === null){
-			$this->priority = self::getPriorityString($this->priorityArray);
-		}
+        self::$priority_list[]=$this->priorityArray;
+        self::$max_priority=max(self::$max_priority, strlen($priority));
+    }
+    
+    public function getPriority()
+    {
+        if($this->priority===null) {
+            $this->priority=self::getPriorityString($this->priorityArray);
+        }
         return $this->priority;
-	}
+    }
     
     public function addScript($content, $type)
     {

@@ -42,7 +42,7 @@ class NoScriptController extends PageController
 	}
 
 	protected function outputScriptReload($context){
-		echo '<script type="text/javascript">';
+		echo '<script>';
 		echo '(function(d,l,r){';
 		//echo 'd.cookie="', BigPipe::$nojsKey, '=0;expires="+(new Date(new Date-1).toGMTString());';
 		echo 'd.cookie="', BigPipe::$nojsKey, '=0;expires="+(new Date(0).toGMTString());';

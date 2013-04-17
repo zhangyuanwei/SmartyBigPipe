@@ -21,11 +21,14 @@ class FirstController extends PageController
     const STAT_OUTPUT_END=4;     // 结束
     
     const HTML_CONTAINER_ID="html_container_id"; //HTML收集器id
+    const HTML_OUTPUT_FORMAT="html_output_format"; //HTML输出方式
     
 	private $state=self::STAT_COLLECT_LAYOUT; //初始状态
 	private $layoutHTML=null;      //布局结构
 	private $layoutStyleLinks=null;//布局所用到的样式链接
 	private $layoutStyles=null;    //布局所用到的样式
+
+	private $resourceMap = array(); //资源表
 
     private $priorityList=null;    //优先级数组
     private $currentPriority=null; //当前优先级
@@ -150,7 +153,11 @@ class FirstController extends PageController
 		$this->layoutStyleLinks = array_merge($context->styleLinks, $this->layoutStyleLinks);
 		$this->layoutStyles = array_merge($context->styles, $this->layoutStyles);
 
-		foreach($this->getDependURLs($this->layoutStyleLinks) as $link){
+		$links = Resource::pathToResource($this->layoutStyleLinks);
+		$links = Resource::getDependResource($links);
+		$links = Resource::resourceToURL($links);
+
+		foreach($links as $link){
 			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$link\" />";
 		}
 
@@ -171,10 +178,14 @@ class FirstController extends PageController
 	 * @return void
 	 */
 	protected function outputBigPipeLibrary($context){
-		foreach($this->getDependURLs(array(BigPipe::$jsLib)) as $src){
+		$jsLibs = Resource::pathToResource(array(BigPipe::$jsLib));
+		$jsLibs = Resource::getDependResource($jsLibs);
+		$jsLibs = Resource::resourceToURL($jsLibs);
+		
+		foreach($jsLibs as $src){
 			echo "<script src=\"$src\"></script>";
 		}
-		echo "<script type=\"text/javascript\">Bootloader=require(\"Bootloader\");</script>";
+		echo "<script>var ", BigPipe::$globalVar, "=new (require(\"BigPipe\"))();</script>\n";
 	} // }}}
 
 	/**
@@ -190,12 +201,31 @@ class FirstController extends PageController
 			$this->outputPageletOpenTag($context);
 		}
 		if($this->currentPriority===$context->getPriority()) {
-			$id=$context->set(self::HTML_CONTAINER_ID, $this->sessionUniqId("__cnt_"));
-			echo "<code id=\"$id\"><!--";
-			//echo "<sctipt id=\"$id\" type=\"text/html\">/*<![CDATA[*/";
+			/*
+			$format = $context->getBigPipeConfig("format", "comment");
+			$context->set(self::HTML_OUTPUT_FORMAT, $format);
+			switch($format){
+			case "json":
+				ob_start();
+				break;
+			case "comment":
+			default:
+				$id=$context->set(self::HTML_CONTAINER_ID, $this->sessionUniqId("__cnt_"));
+				echo "<code id=\"$id\" style=\"display:none\"><!--";
+				break;
+			}
+			 */
+			ob_start();
 			$ret = true;
 		}
 		return $ret;
+	}
+
+	private function getUnsetResources($list){
+		$resources = Resource::pathToResource($list);
+		$resources = Resource::getDependResource($resources, $this->resourceMap);
+		$this->resourceMap = array_merge($this->resourceMap, $resources);
+		return $resources;
 	}
 
 	/**
@@ -207,13 +237,89 @@ class FirstController extends PageController
 	 */
 	protected function pageletClose($context){
 		if($context->opened) {
-			echo "--></code>";
-			//echo "/*]]>*/</script>\n";
-			$id=$context->get(self::HTML_CONTAINER_ID);
-			echo "<script>var a=(a+50)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;},a);</script>\n";
-			//echo "<script>document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$id\").childNodes[0].nodeValue;</script>\n";
+			$content = ob_get_clean();
+			$content = str_replace(
+				array("\\", "-->"),
+				array("\\\\", "--\\>"),
+				$content
+			);
+
+			$containerId=$this->sessionUniqId("__cnt_");
+
+			$config = array(
+				"id" => $context->getConfig("id"),
+				"container_id" => $containerId,
+				//  "content" => $container_id,
+				//	"css" => array(),
+				//	"js" => array(),
+				//	"resource_map" => array(),
+				//	"onload" => array()
+			);
+
+			if(!empty($context->styleLinks)){
+				$config["css"] = array_keys(Resource::pathToResource($context->styleLinks));
+			}
+
+			if(!empty($context->scriptLinks)){
+				$config["js"] = array_keys(Resource::pathToResource($context->scriptLinks));
+			}
+
+			$resourceMap = $this->getUnsetResources(array_merge(
+				$context->styleLinks,
+				$context->scriptLinks
+			));
+
+			if(!empty($resourceMap)){
+				$map = array();
+				foreach($resourceMap as $id=>$res){
+					$item = array(
+						'src' => $res->getURL(),
+						'type' => $res->getType(),
+					);
+
+					$deps = $res->getDepends();
+					if(!empty($deps)){
+						$item['deps'] = array_keys($deps);
+					}
+
+					$map[$id] = $item;
+				}
+				$config["resource_map"] = $map;
+			}
+
+			echo "<code id=\"$containerId\" style=\"display:none\"><!-- ";
+			echo $content;
+			echo " --></code>";
+			echo "<script>", BigPipe::$globalVar, ".onPageletArrive(", json_encode($config), ");</script>\n";
+			//echo "<script>var a=(a+50)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$containerId\").childNodes[0].nodeValue;},a);</script>\n";
+
+			//var_dump($context->scriptLinks);
+			/*
+			$config = array(
+				"id" => $context->getConfig("id"),
+				"content" => $id,
+				//	"css" => array(),
+				//	"js" => array(),
+				//	"resource_map" => array(),
+				//	"onload" => array()
+			);
+
+			$format = $context->get(self::HTML_OUTPUT_FORMAT);
+			switch($format){
+			case "json":
+				$content = ob_get_clean();
+				break;
+			case "comment":
+			default:
+				echo "--></code>";
+				$id=$context->get(self::HTML_CONTAINER_ID);
+				break;
+			}
+
+			echo "<script>", BigPipe::$globalVar, ".onPageletArrive(", json_encode($config), ");</script>\n";
+			*/
 		}
-		
+
 		if($context->parent->opened) {
 			$this->outputCloseTag($context);
 		}
@@ -242,87 +348,65 @@ class FirstController extends PageController
 		default:
 			break;
 		}
-/*
-        switch($this->state) {
-        case self::STAT_OUTPUT_LAYOUT:
-            $this->priority_list=array_filter(BigPipeContext::uniquePriority(), array(
-                $this,
-                'filterPriority'
-            ));
-            
-            $this->state=empty($this->priority_list) ? self::STAT_OUTPUT_END : self::STAT_OUTPUT_CONTENT;
-            return true;
-        
-        case self::STAT_OUTPUT_CONTENT:
-            
-            $this->state=empty($this->priority_list) ? self::STAT_OUTPUT_END : self::STAT_OUTPUT_CONTENT;
-            $this->current_priority=array_pop($this->priority_list);
-            return true;
-        
-        case self::STAT_OUTPUT_END:
-        default:
-            return false;
-        }
- */
 	} // }}}
 
 	/**
-     * getActionKey 得到需要执行的动作索引 {{{ 
-     * 
-     * @param mixed $context 
-     * @param mixed $action 
-     * @access protected
-     * @return void
-     */
-    protected function getActionKey($type, $action) 
-    {
-        $keys=array();
-        switch($this->state) {
-        case self::STAT_COLLECT_LAYOUT:
-            $keys[]="collect";
-            break;
-        case self::STAT_OUTPUT_LAYOUT:
-            $keys[]="layout";
-            break;
-        case self::STAT_OUTPUT_CONTENT:
-            $keys[]="content";
-            break;
-        case self::STAT_OUTPUT_END:
-            $keys[]="end";
-            break;
-        default:
-        }
+	 * getActionKey 得到需要执行的动作索引 {{{ 
+	 * 
+	 * @param mixed $context 
+	 * @param mixed $action 
+	 * @access protected
+	 * @return void
+	 */
+	protected function getActionKey($type, $action) 
+	{
+		$keys=array();
+		switch($this->state) {
+		case self::STAT_COLLECT_LAYOUT:
+			$keys[]="collect";
+			break;
+		case self::STAT_OUTPUT_LAYOUT:
+			$keys[]="layout";
+			break;
+		case self::STAT_OUTPUT_CONTENT:
+			$keys[]="content";
+			break;
+		case self::STAT_OUTPUT_END:
+			$keys[]="end";
+			break;
+		default:
+		}
 
-	   switch($type) {
-	   case BigPipe::HTML:
-	       $keys[]="html";
-	       break;
-	   case BigPipe::HEAD:
-	       $keys[]="head";
-	       break;
-	   case BigPipe::TITLE:
-	       $keys[]="title";
-	       break;
-	   case BigPipe::BODY:
-	       $keys[]="body";
-	       break;
-	   case BigPipe::PAGELET:
-	       $keys[]="pagelet";
-	       break;
-	   default:
-	   }
-        
-        switch($action) {
-        case PageController::ACTION_OPEN:
-            $keys[]="open";
-            break;
-        case PageController::ACTION_CLOSE:
-            $keys[]="close";
-            break;
-        case PageController::ACTION_MORE:
-            $keys[]="more";
-            break;
-        default:
+		switch($type) {
+		case BigPipe::HTML:
+			$keys[]="html";
+			break;
+		case BigPipe::HEAD:
+			$keys[]="head";
+			break;
+		case BigPipe::TITLE:
+			$keys[]="title";
+			break;
+		case BigPipe::BODY:
+			$keys[]="body";
+			break;
+		case BigPipe::PAGELET:
+			$keys[]="pagelet";
+			break;
+		default:
+		}
+
+		switch($action) {
+		case PageController::ACTION_OPEN:
+			$keys[]="open";
+			break;
+		case PageController::ACTION_CLOSE:
+			$keys[]="close";
+			break;
+		case PageController::ACTION_MORE:
+			$keys[]="more";
+			break;
+		default:
 		}
 
 		$key = join("_", $keys);
@@ -330,23 +414,23 @@ class FirstController extends PageController
 			$key = 'default';
 		}
 		return $key;
-    } // }}}
+	} // }}}
 
 	/**
-     * sessionUniqId 得到本次会话中唯一ID {{{ 
-     * 
-     * @param string $prefix 可选前缀 
-     * @access private
-     * @return string
-     */
+	 * sessionUniqId 得到本次会话中唯一ID {{{ 
+	 * 
+	 * @param string $prefix 可选前缀 
+	 * @access private
+	 * @return string
+	 */
 	private function sessionUniqId($prefix="") {
 		if(!isset($this->uniqIds[$prefix])){
 			$this->uniqIds[$prefix] = 0;
 		}
 		$this->uniqIds[$prefix]++;
-        return $prefix . $this->sessionId . "_" . $this->uniqIds[$prefix];
-        //sessionKey
-    } // }}}
+		return $prefix . $this->sessionId . "_" . $this->uniqIds[$prefix];
+		//sessionKey
+	} // }}}
 
 }
 

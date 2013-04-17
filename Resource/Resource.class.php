@@ -21,7 +21,7 @@ abstract class Resource
     
     private $path=null; //资源路径
     private $content=null; //输出内容
-    private $depends=array(); //依赖资源列表
+    private $depends=null; //依赖资源列表
     private $id=null; //资源ID
     
     private $configHandlers=array('depend'=>'depend');
@@ -99,7 +99,7 @@ abstract class Resource
     } // }}}
     
     /**
-     * exists 资源是否存在 {{{
+     * hasResource  资源是否存在 {{{
      * 
      * @param mixed $path 
      * @static
@@ -144,6 +144,129 @@ abstract class Resource
     } // }}}
     
     /**
+     * pathToResource 批量生成Resources对象 {{{ 
+     * 
+     * @param mixed $list 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function pathToResource($list)
+    {
+        $ret=array();
+        foreach($list as $path) {
+            $res=self::getResource($path);
+            $ret[$res->getId()]=$res;
+        }
+        return $ret;
+    }// }}}
+    
+    /**
+     * resourceToURL 批量得到资源地址 {{{
+     * 
+     * @param mixed $list 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function resourceToURL($list)
+    {
+        $ret=array();
+        foreach($list as $key=>$res) {
+            $ret[$key]=$res->getURL();
+        }
+        return $ret;
+    } // }}}
+    
+    /**
+     * getDependResource 得到列表中资源依赖关系 {{{
+     * 
+     * @param mixed $list 
+     * @param mixed $reference 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function getDependResource($list, $reference=null)
+    {
+        $resolved=array();
+        $depends=array();
+        
+        $list=array_reverse($list);
+        
+        while(!empty($list)) {
+            $res=end($list);
+            $id=key($list);
+            
+            if(isset($reference[$id])||isset($depends[$id])) { // 依赖列表中已经存在
+                array_pop($list);
+                continue;
+            }
+            
+            if(isset($resolved[$id])) { // 依赖已经解决
+                $depends[$id]=$res;
+                array_pop($list);
+                continue;
+            }
+            
+            $more=false; // 是否有未填加的依赖资源
+            foreach($res->getDepends() as $did=>$dep) {
+                if(!isset($depends[$did])) {
+                    unset($list[$did]);
+                    $list[$did]=$dep;
+                    $more=true;
+                }
+            }
+            
+            if($more) {
+                $resolved[$id]=true;
+            } else {
+                $depends[$id]=$res;
+                array_pop($list);
+            }
+		}
+		return $depends;
+    } // }}}
+    
+    /**
+     * scanResources 查找所有资源 {{{
+     * 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function scanResources()
+    {
+        $resources=array();
+        foreach(self::$rootDirs as $root) {
+            $dirs=array(
+                "/"
+            );
+            while(!empty($dirs)) {
+                $path=array_pop($dirs);
+                $dir=$root . $path;
+                foreach(scandir($dir) as $entry) {
+                    if($entry==="."||$entry==="..")
+                        continue;
+                    $file=$dir . $entry;
+                    if(is_dir($file)) {
+                        $dirs[]=$path . $entry . "/";
+                    } else {
+                        try {
+                            $res=self::getResource($path . $entry);
+                            $resources[$res->getId()]=$res;
+                        }
+                        catch(Exception $e) {
+                        }
+                    }
+                }
+            }
+        }
+        return $resources;
+    } // }}}
+    
+    // }}}
+    /**
      * __construct 构造函数 {{{ 
      * 
      * @param mixed $path 
@@ -158,7 +281,6 @@ abstract class Resource
             throw new Exception("Resource path mast start whith\"\/\".");
         }
     } // }}}
-    // }}}
     
     public function getPath()
     {
@@ -190,7 +312,10 @@ abstract class Resource
     
     public function getDepends()
     {
-        $this->getContent();
+        if(null===$this->depends) {
+            $this->depends=array();
+            $this->genDepends();
+        }
         return $this->depends;
     }
     
@@ -263,7 +388,7 @@ abstract class Resource
     
     protected function exists()
     {
-        return $this->getFilePath() !== false;
+        return $this->getFilePath()!==false;
     }
     
     /**
@@ -275,8 +400,13 @@ abstract class Resource
      */
     protected function depend($path)
     {
-        $res=self::getResource($this->getAbsolutPath($path));
-        $this->depends[$res->getId()]=$res;
+        try {
+            $res=self::getResource($this->getAbsolutPath($path));
+            $this->depends[$res->getId()]=$res;
+        }
+        catch(Exception $e) {
+            trigger_error("\"" . $this->path . "\" depend \"$path\" error:" . $e->getMessage());
+        }
     } // }}}
     
     protected function genContent()
