@@ -319,6 +319,8 @@ abstract class Resource
         return $this->depends;
     }
     
+	abstract protected function genDepends();
+
     public function getContent()
     {
         if(null===$this->content) {
