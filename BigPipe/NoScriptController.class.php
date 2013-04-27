@@ -14,22 +14,24 @@ class NoScriptController extends PageController
     
 	private $state=self::STAT_COLLECT;
 	private $bodyHTML=null;
+	private $bodyStyleLinks=array();
     
     public function __construct()
     {
 		$this->actionChain=array(
 			'default' => false,
 			// 收集
+			'collect_html_open'  => array('outputOpenTag', true),
 			'collect_body_open'  => array('startCollect', true),
 			'collect_block_open' => array('outputOpenTag', true),
-			'collect_body_close' => array('collectBody'),
+			'collect_block_close'=> array('collectStyle', 'outputCloseTag'),
+			'collect_body_close' => array('collectBody', 'collectStyle'),
 			'collect_more'       => array('changeState', true),
 			// 输出
-			'output_html_open'   => array('outputOpenTag', true),
 			'output_head_open'   => array('outputOpenTag', 'outputScriptReload', true),
-			'output_title_open'   => array('outputOpenTag', true),
-			'output_title_close'  => array('outputCloseTag'),
-			'output_head_close'  => array('outputCloseTag'),
+			'output_title_open'  => array('outputOpenTag', true),
+			'output_title_close' => array('outputCloseTag'),
+			'output_head_close'  => array('outputStyle', 'outputCloseTag'),
 			'output_body_open'   => array('outputOpenTag', 'outputBody',false),
 			'output_body_close'  => array('outputCloseTag'),
 			'output_html_close'  => array('outputCloseTag'),
@@ -39,6 +41,21 @@ class NoScriptController extends PageController
 
 	protected function collectBody($context){
 		$this->bodyHTML = ob_get_clean();
+	}
+
+	protected function collectStyle($context){
+		$this->bodyStyleLinks = array_merge($this->bodyStyleLinks, $context->styleLinks);
+	}
+
+	protected function outputStyle($context){
+		$this->bodyStyleLinks = array_merge($context->styleLinks, $this->bodyStyleLinks);
+
+		$links = Resource::pathToResource($this->bodyStyleLinks);
+		$links = Resource::getDependResource($links);
+		$links = Resource::resourceToURL($links);
+		foreach($links as $link){
+			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$link\" />";
+		}
 	}
 
 	protected function outputScriptReload($context){

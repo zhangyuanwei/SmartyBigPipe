@@ -35,8 +35,8 @@ abstract class BigPipe // BigPipe 流控制 {{{
     protected static $ajaxKey='__ajax__';
     protected static $sessionKey='__session__';
     protected static $nojsKey='__noscript__';
-    protected static $jsLib='/BigPipe/javascript/bootloader.js';
-    protected static $globalVar='bigPipe';
+    protected static $jsLib='/BigPipe/boot.js';
+//    protected static $globalVar='bigPipe';
     protected static $separator=' ';
     
     private static $state=self::STAT_UNINIT; // 当前状态
@@ -51,7 +51,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
         $nojs=self::$nojsKey;
         if(isset($_GET[$nojs])||isset($_COOKIE[$nojs])) {
             setcookie($nojs, 1);
-            if(!class_exists("NoScriptController")) {
+            if(!class_exists("NoScriptController", false)) {
                 require(BIGPIPE_BASE_DIR . 'NoScriptController.class.php');
             }
             return new NoScriptController();
@@ -67,12 +67,12 @@ abstract class BigPipe // BigPipe 流控制 {{{
                 $ids=explode(self::$separator, $ids);
             }
             
-            if(!class_exists("QuicklingController")) {
+            if(!class_exists("QuicklingController", false)) {
                 require(BIGPIPE_BASE_DIR . 'QuicklingController.class.php');
             }
             return new QuicklingController(intval($_GET[$session]), $ids);
         } else {
-            if(!class_exists("FirstController")) {
+            if(!class_exists("FirstController", false)) {
                 require(BIGPIPE_BASE_DIR . 'FirstController.class.php');
             }
             return new FirstController();
@@ -178,10 +178,10 @@ abstract class BigPipe // BigPipe 流控制 {{{
             self::$jsLib=$config[$key];
         }
         
-        $key=self::getAttrKey('var');
-        if(isset($config[$key])) {
-            self::$globalVar=$config[$key];
-        }
+//        $key=self::getAttrKey('var');
+//        if(isset($config[$key])) {
+//            self::$globalVar=$config[$key];
+//        }
         
         self::$controller=self::getController();
         self::$state=self::STAT_FIRST;
@@ -290,7 +290,7 @@ abstract class PageController extends BigPipe // {{{
             if(is_array($actions)) {
                 foreach($actions as $method) {
                     if(is_string($method)) {
-                        $ret=call_user_method($method, $this, $context);
+                        $ret=call_user_func(array($this, $method), $context);
                     } else {
                         $ret=$method;
                     }
@@ -381,7 +381,19 @@ abstract class PageController extends BigPipe // {{{
     {
         ob_start();
     } // }}}
-    
+
+	/**
+	 * clearCollect 清除收集的内容 {{{
+	 * 
+	 * @param mixed $context 
+	 * @access protected
+	 * @return void
+	 */
+	protected function clearCollect($context)
+	{
+		ob_clean();
+	} // }}}
+
     /**
      * collectScript 收集脚本 {{{
      * 
@@ -391,7 +403,7 @@ abstract class PageController extends BigPipe // {{{
      */
     protected function collectScript($context)
     {
-        $context->parent->addScript(ob_get_clean(), $context->getBigPipeConfig("runtime", "onload"));
+        $context->parent->addScript(ob_get_clean(), $context->getBigPipeConfig("on", "load"));
     } // }}}
     
     /**

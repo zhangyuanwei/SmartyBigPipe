@@ -24,7 +24,7 @@ abstract class Resource
     private $depends=null; //依赖资源列表
     private $id=null; //资源ID
     
-    private $configHandlers=array('depend'=>'depend');
+    private $configHandlers=array('depend'=>'depend', 'import'=>'import');
     
     // 静态方法	{{{
     /**
@@ -307,20 +307,19 @@ abstract class Resource
     
     public function getURL()
     {
-        return $this->path;
+        //return $this->path;
+        return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
     }
     
     public function getDepends()
     {
         if(null===$this->depends) {
             $this->depends=array();
-            $this->genDepends();
+            $this->getContent();
         }
         return $this->depends;
     }
     
-	abstract protected function genDepends();
-
     public function getContent()
     {
         if(null===$this->content) {
@@ -364,7 +363,8 @@ abstract class Resource
     }
     
     protected function parseConfig($code)
-    {
+	{
+		$output = '';
         if(preg_match_all('!@(?<config>\w+)(?:[ \t]+(?<argument>true|false|\d+|"[^"]*"|\'[^\']*\'))?!', $code, $matches, PREG_SET_ORDER)) {
             foreach($matches as $item) {
                 $config=$item['config'];
@@ -382,10 +382,11 @@ abstract class Resource
                     }
                 }
                 if(isset($this->configHandlers[$config])) {
-                    call_user_method($this->configHandlers[$config], $this, $argument);
+                    $output .= call_user_func(array($this, $this->configHandlers[$config]), $argument);
                 }
             }
-        }
+		}
+		return $output;
     }
     
     protected function exists()
@@ -410,8 +411,40 @@ abstract class Resource
             trigger_error("\"" . $this->path . "\" depend \"$path\" error:" . $e->getMessage());
         }
     } // }}}
-    
-    protected function genContent()
+
+    /**
+     * import 引入文件 {{{
+     * 
+     * @param mixed $path 
+     * @access protected
+     * @return void
+     */
+    protected function import($path)
+    {
+        try {
+			$res=self::getResource($this->getAbsolutPath($path));
+			return $res->getContent();
+        }
+        catch(Exception $e) {
+            trigger_error("\"" . $this->path . "\" import \"$path\" error:" . $e->getMessage());
+        }
+    } // }}}
+
+	/**
+	 * expires 设置过期时间 {{{ 
+	 * 
+	 * @param int $seconds 
+	 * @access public
+	 * @return void
+	 */
+	public function expires($seconds = 31104000){
+		$time = date('D, d M Y H:i:s', time() + $seconds) . ' GMT';
+		header("Expires: $time");
+		header("Cache-Control: max-age=$seconds");
+	}
+	//}}}
+	
+	protected function genContent()
     {
         if($file=$this->getFilePath()) {
             $content=file_get_contents($file);

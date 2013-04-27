@@ -1,0 +1,5 @@
+// @import 'cmd.js'
+// @import 'slice.js'
+// @import 'getElementById.js'
+// @import 'copyProperties.js'
+// @import 'inherits.js'

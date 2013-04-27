@@ -45,12 +45,15 @@ class FirstController extends PageController
 		$this->actionChain=array(
 			'default'              => false,
 			//收集阶段
+//			'collect_html_open'    => array('startCollect', true),
+			'collect_html_open'    => array('outputOpenTag', true),
 			'collect_body_open'    => array('startCollect', true),
 			'collect_body_close'   => array('collectLayout'),
 			'collect_pagelet_open' => array('outputPlaceHolder', 'setPageletPriority', false),
+//			'collect_html_close'   => array('clearCollect'),
 			'collect_more'         => array('changeState', true),
 			//输出布局阶段
-			'layout_html_open'     => array('outputOpenTag', true),
+//			'layout_html_open'     => array('outputOpenTag', false),
 			'layout_head_open'     => array('outputOpenTag', 'outputNoscriptFallback', true),
 			'layout_title_open'    => array('outputOpenTag', true),
 			'layout_title_close'   => array('outputCloseTag'),
@@ -155,6 +158,7 @@ class FirstController extends PageController
 
 		$links = Resource::pathToResource($this->layoutStyleLinks);
 		$links = Resource::getDependResource($links);
+		//$this->resourceMap = $links;
 		$links = Resource::resourceToURL($links);
 
 		foreach($links as $link){
@@ -185,7 +189,8 @@ class FirstController extends PageController
 		foreach($jsLibs as $src){
 			echo "<script src=\"$src\"></script>";
 		}
-		echo "<script>var ", BigPipe::$globalVar, "=new (require(\"BigPipe\"))();</script>\n";
+		//echo "<script>var ", BigPipe::$globalVar, "=new (require(\"BigPipe\"))();</script>\n";
+		echo "<script>BigPipe.init();</script>\n";
 	} // }}}
 
 	/**
@@ -248,13 +253,13 @@ class FirstController extends PageController
 
 			$config = array(
 				"id" => $context->getConfig("id"),
-				"container_id" => $containerId,
-				//  "content" => $container_id,
-				//	"css" => array(),
-				//	"js" => array(),
-				//	"resource_map" => array(),
-				//	"onload" => array()
+				"container_id" => $containerId
 			);
+
+			$parent = $context->parent->getConfig("id");
+			if(!empty($parent)){
+				$config["parent"] = $parent;
+			}
 
 			if(!empty($context->styleLinks)){
 				$config["css"] = array_keys(Resource::pathToResource($context->styleLinks));
@@ -262,6 +267,10 @@ class FirstController extends PageController
 
 			if(!empty($context->scriptLinks)){
 				$config["js"] = array_keys(Resource::pathToResource($context->scriptLinks));
+			}
+
+			if(!empty($context->scripts)){
+				$config["hook"] = $context->scripts;
 			}
 
 			$resourceMap = $this->getUnsetResources(array_merge(
@@ -290,7 +299,8 @@ class FirstController extends PageController
 			echo "<code id=\"$containerId\" style=\"display:none\"><!-- ";
 			echo $content;
 			echo " --></code>";
-			echo "<script>", BigPipe::$globalVar, ".onPageletArrive(", json_encode($config), ");</script>\n";
+			//echo "<script>", BigPipe::$globalVar, ".onPageletArrive(", json_encode($config), ");</script>\n";
+			echo "<script>BigPipe.onPageletArrive(", json_encode($config), ");</script>\n";
 			//echo "<script>var a=(a+50)||0;setTimeout(function(){document.getElementById(", json_encode($context->getConfig("id")), ").innerHTML=document.getElementById(\"$containerId\").childNodes[0].nodeValue;},a);</script>\n";
 
 			//var_dump($context->scriptLinks);

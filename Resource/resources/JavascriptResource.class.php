@@ -1,22 +1,48 @@
 <?php
 
 Resource::registerHandler('/^.*\.js$/', 'JavascriptResource');
-//Resource::registerHandler('!^/libs/BigPipe/facebook/output/.*\.js$!', 'JavascriptResource');
-//Resource::registerHandler('!^/viz/.*\.js$!', 'JavascriptResource');
-//Resource::registerHandler('!^/common/js/jquery-1.7.2.js$!', 'JavascriptResource');
 class JavascriptResource extends Resource
 {
-	protected function genDepends(){
-        $content=$this->getContent();
-        if(preg_match_all('/\/\*(?<code>[\s\S]*?)\*\//m', $content, $matches, PREG_SET_ORDER)) {
-            foreach($matches as $item) {
-                $this->parseConfig($item["code"]);
-            }
+    protected function genContent()
+    {
+        $content=parent::genContent();
+        $content=preg_replace_callback(array(
+            '/\/\*(?<code>[\s\S]*?)\*\//m',
+            '/\/\/(?<code>.*)/'
+        ), array(
+            $this,
+            'processComment'
+        ), $content);
+        
+        return $content;
+	}
+
+    private function processComment($matches)
+	{
+        $output=$matches[0];
+        $code=$this->parseConfig($matches['code']);
+        if(!empty($code)) {
+            $output.="\n" . $code;
         }
-	}
-	
-	public function getType(){
-		return 'js';
-	}
+        return $output;
+    }
+    
+    public function getType()
+    {
+        return 'js';
+    }
+    
+    public function output()
+    {
+        header('Content-Type: text/javascript');
+        $this->expires();
+        $contents=$this->getContent();
+        if(false!==$contents) {
+            echo $contents, "\n";
+        } else {
+            header('HTTP/1.1 404 Not Found');
+        }
+    }
+    
 }
 
