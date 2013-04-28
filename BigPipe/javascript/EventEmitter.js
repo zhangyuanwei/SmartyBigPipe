@@ -94,3 +94,4 @@ copyProperties(EventEmitter, {
 return EventEmitter;
 });
 /* __wrapped__ */
+/* @wrap false */

@@ -14,7 +14,7 @@ class JavascriptResource extends Resource
             'processComment'
         ), $content);
         
-        return $content;
+        return $this->runFilter("post", $content);
 	}
 
     private function processComment($matches)

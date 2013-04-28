@@ -1,3 +1,4 @@
+/* @wrap false */
 function inherits(subClass, superClass, prototype) {
     var tmpProto;
     if (this instanceof inherits) {

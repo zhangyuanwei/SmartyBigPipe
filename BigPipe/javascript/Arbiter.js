@@ -10,7 +10,9 @@ __d("Arbiter",["global"],function(global, require, module, exports){
         var fn = callback[0],
             context = callback[1],
             args = callback[2].concat(args);
-        return fn.apply(context, args);
+        try {
+            return fn.apply(context, args);
+        } catch (e) {}
     }
 
     copyProperties(Arbiter.prototype, {
@@ -59,7 +61,7 @@ __d("Arbiter",["global"],function(global, require, module, exports){
             index = -1;
             ret = true;
             while (++index < count) {
-                ret = call(cbs[index], args) && ret;
+                ret = (call(cbs[index], args) !== false) && ret;
             }
             return !!ret;
         },
@@ -73,3 +75,4 @@ __d("Arbiter",["global"],function(global, require, module, exports){
     return Arbiter;
 });
 /* __wrapped__ */
+/* @wrap false */

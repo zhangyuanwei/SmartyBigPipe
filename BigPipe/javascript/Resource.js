@@ -1,4 +1,4 @@
-__d("Resource", ["Arbiter", "CSSLoader"], function(global, require, module, exports) {
+__d("Resource",["Arbiter","CSSLoader","JSLoader"],function(global, require, module, exports){
     var Arbiter = require("Arbiter"),
         resourceMap = {},
         resourceLoader = {},
@@ -25,7 +25,7 @@ __d("Resource", ["Arbiter", "CSSLoader"], function(global, require, module, expo
         var item, res, type;
         if (!(item = resourceMap[id])) throw new Error("resource \"" + id + "\" unknow.");
         if (!(res = item._handler)) {
-            res = item._handler = new Resource(id, item.deps || [], item.serial || true);
+            res = item._handler = new Resource(id, item.deps || [], item.serial || false);
         }
         return res;
     }
@@ -58,19 +58,31 @@ __d("Resource", ["Arbiter", "CSSLoader"], function(global, require, module, expo
                     dep.load();
                 }
             }
+			
+			if(resolved || !this.serial){
+				doload.call(this);
+			}
+
+/*
             if (depcount === 0 // 依赖资源已经全部加载完成
             || !this.serial) { // 或者可以并行
                 doload.call(this);
             }
-
-            function onresolve(id) {
+*/
+            function onresolve() {
                 if (!(--depcount)) { //依赖资源加载完成
                     resolved = true;
-                    if (loaded) {
+					if(loaded){
                         this.done("resolve");
+					}else if(!loading){
+						doload.call(this);
+					}
+					/*
+                    if (loaded) {
                     } else {
                         doload.call(this);
                     }
+					*/
                 }
             }
 
@@ -108,9 +120,14 @@ __d("Resource", ["Arbiter", "CSSLoader"], function(global, require, module, expo
     }
 
 
-    function setResourceMap(obj) {
-        for (var id in obj) {
-            resourceMap[id] = obj[id];
+    function setResourceMap(id, obj) {
+        if (obj !== undefined) {
+            resourceMap[id] = obj;
+        } else {
+            obj = id;
+            for (id in obj) {
+                resourceMap[id] = obj[id];
+            }
         }
     }
 
@@ -120,6 +137,8 @@ __d("Resource", ["Arbiter", "CSSLoader"], function(global, require, module, expo
     });
 
     registerLoader("css", require("CSSLoader"));
+    registerLoader("js", require("JSLoader"));
     return Resource;
 });
 /* __wrapped__ */
+/* @wrap false */

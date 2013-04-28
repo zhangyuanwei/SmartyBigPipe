@@ -1,3 +1,4 @@
+/* @wrap false */
 function slice(array, start, end) {
     var _slice = Array.prototype.slice;
     slice = function(array, start, end) {

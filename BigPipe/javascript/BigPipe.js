@@ -1,7 +1,6 @@
-__d("BigPipe",["Resource","Pagelet","CSSLoader"],function(global, require, module, exports){
+__d("BigPipe",["Resource","Pagelet"],function(global, require, module, exports){
     var Resource = require("Resource"),
         Pagelet = require("Pagelet"),
-        CSSLoader = require("CSSLoader"),
         inited = false;
 
     function getContentFromContainer(id, doc) {
@@ -34,18 +33,19 @@ __d("BigPipe",["Resource","Pagelet","CSSLoader"],function(global, require, modul
      * @return void
      */
     function onPageletArrive(obj) {
-        var parent, content, children, css, js, pagelet, hook, type, list, i, count;
+        var id, parent, content, children, css, js, pagelet, hook, type, list, i, count;
         if (!inited) init();
+        id = obj.id;
         Resource.setResourceMap(obj.resource_map);
         obj.html = getContent(obj);
-        pagelet = Pagelet(obj.id);
+        pagelet = Pagelet(id);
         if (hook = obj.hook) {
             for (type in hook) {
                 list = hook[type];
                 count = list.length;
                 i = -1;
                 while (++i < count) {
-                    //pagelet.on(type, new Function(list[i]), pagelet);
+                    pagelet.on(type, new Function(list[i]), pagelet);
                 }
             }
         }
@@ -58,3 +58,4 @@ __d("BigPipe",["Resource","Pagelet","CSSLoader"],function(global, require, modul
     };
 });
 /* __wrapped__ */
+/* @wrap false */

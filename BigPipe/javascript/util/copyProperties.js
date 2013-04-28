@@ -1,3 +1,4 @@
+/* @wrap false */
 function copyProperties(target) {
     target = target || {};
     var args = arguments,

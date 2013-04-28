@@ -1,3 +1,4 @@
+/* @wrap false */
 /** 
  *           File:  cmd.js
  *           Path:  BigPipe/javascript

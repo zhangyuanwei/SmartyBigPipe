@@ -8,6 +8,7 @@
  *
  *    __ignore__ 
  */
+/* @wrap false */
 "use strict";
 
 (function(global, window, document, undefined) {
@@ -17,6 +18,7 @@
     //@import 'Pagelet.js'
     //@import 'BigPipe.js'
     //@import 'CSSLoader.js'
+    //@import 'JSLoader.js'
 
     var _BigPipe = global["BigPipe"],
         BigPipe = require("BigPipe");

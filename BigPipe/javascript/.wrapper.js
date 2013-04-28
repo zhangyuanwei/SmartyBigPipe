@@ -56,7 +56,8 @@ var fs = require("fs");
             output.push("__d(\"", module, "\",", JSON.stringify(deps), ",function(global, require, module, exports){");
             output.push(code);
             output.push("});\n");
-            output.push("/* __wrapped__ */");
+            output.push("/* __wrapped__ */\n");
+            output.push("/* @wrap false */");
         }
         fs.writeFileSync(file, output.join(""));
 

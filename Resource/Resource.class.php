@@ -24,7 +24,9 @@ abstract class Resource
     private $depends=null; //依赖资源列表
     private $id=null; //资源ID
     
-    private $configHandlers=array('depend'=>'depend', 'import'=>'import');
+    //private $configHandlers=array('depend'=>'depend', 'import'=>'import');
+	private $configHandlers=array();
+	private $vars = array();
     
     // 静态方法	{{{
     /**
@@ -159,7 +161,7 @@ abstract class Resource
             $ret[$res->getId()]=$res;
         }
         return $ret;
-    }// }}}
+    } // }}}
     
     /**
      * resourceToURL 批量得到资源地址 {{{
@@ -224,8 +226,8 @@ abstract class Resource
                 $depends[$id]=$res;
                 array_pop($list);
             }
-		}
-		return $depends;
+        }
+        return $depends;
     } // }}}
     
     /**
@@ -276,7 +278,9 @@ abstract class Resource
     protected function __construct($path)
     {
         if(substr($path, 0, 1)=='/') {
-            $this->path=$path;
+			$this->path=$path;
+			$this->registerConfigHandler("depend", array($this, "depend"));
+			$this->registerConfigHandler("import", array($this, "import"));
         } else {
             throw new Exception("Resource path mast start whith\"\/\".");
         }
@@ -308,7 +312,8 @@ abstract class Resource
     public function getURL()
     {
         //return $this->path;
-        return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
+        return '/rsrc.php?uri=' . urlencode($this->path);
+        //return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
     }
     
     public function getDepends()
@@ -361,32 +366,52 @@ abstract class Resource
         }
         return '/' . implode('/', $path);
     }
+
+	public function get($key, $default = null){
+		return isset($this->vars[$key]) ? $this->vars[$key] : $default;
+	}
+
+	public function set($key, $value){
+        if(isset($value)) {
+            $this->vars[$key]=$value;
+        } elseif(isset($this->vars[$key])) {
+            unset($this->vars[$key]);
+        }
+        return $value;
+	}
+
+    public function registerConfigHandler($config, $callback)
+    {
+        $this->configHandlers[$config][]=$callback;
+    }
     
     protected function parseConfig($code)
-	{
-		$output = '';
+    {
+        $output='';
         if(preg_match_all('!@(?<config>\w+)(?:[ \t]+(?<argument>true|false|\d+|"[^"]*"|\'[^\']*\'))?!', $code, $matches, PREG_SET_ORDER)) {
             foreach($matches as $item) {
                 $config=$item['config'];
-                $argument=null;
-                if(isset($item['argument'])) {
-                    $argument=$item['argument'];
-                    if($argument==="true") {
-                        $argument=true;
-                    } else if($argument==="false") {
-                        $argument=false;
-                    } else if($argument[0]==='"'||$argument[0]==="'") {
-                        $argument=substr($argument, 1, -1);
-                    } else {
-                        $argument=intval($argument);
+                if(isset($this->configHandlers[$config])) {
+                    $argument=null;
+                    if(isset($item['argument'])) {
+                        $argument=$item['argument'];
+                        if($argument==="true") {
+                            $argument=true;
+                        } else if($argument==="false") {
+                            $argument=false;
+                        } else if($argument[0]==='"'||$argument[0]==="'") {
+                            $argument=substr($argument, 1, -1);
+                        } else {
+                            $argument=intval($argument);
+                        }
+					}
+                    foreach($this->configHandlers[$config] as $callback) {
+                        $output.=call_user_func($callback, $argument, $this);
                     }
                 }
-                if(isset($this->configHandlers[$config])) {
-                    $output .= call_user_func(array($this, $this->configHandlers[$config]), $argument);
-                }
             }
-		}
-		return $output;
+        }
+        return $output;
     }
     
     protected function exists()
@@ -411,7 +436,7 @@ abstract class Resource
             trigger_error("\"" . $this->path . "\" depend \"$path\" error:" . $e->getMessage());
         }
     } // }}}
-
+    
     /**
      * import 引入文件 {{{
      * 
@@ -422,42 +447,48 @@ abstract class Resource
     protected function import($path)
     {
         try {
-			$res=self::getResource($this->getAbsolutPath($path));
-			return $res->getContent();
+            $res=self::getResource($this->getAbsolutPath($path));
+            return $res->getContent();
         }
         catch(Exception $e) {
             trigger_error("\"" . $this->path . "\" import \"$path\" error:" . $e->getMessage());
         }
     } // }}}
-
-	/**
-	 * expires 设置过期时间 {{{ 
-	 * 
-	 * @param int $seconds 
-	 * @access public
-	 * @return void
-	 */
-	public function expires($seconds = 31104000){
-		$time = date('D, d M Y H:i:s', time() + $seconds) . ' GMT';
-		header("Expires: $time");
-		header("Cache-Control: max-age=$seconds");
-	}
-	//}}}
-	
-	protected function genContent()
+    
+    /**
+     * expires 设置过期时间 {{{ 
+     * 
+     * @param int $seconds 
+     * @access public
+     * @return void
+     */
+    public function expires($seconds=31104000)
+    {
+        $time=date('D, d M Y H:i:s', time()+$seconds) . ' GMT';
+        header("Expires: $time");
+        header("Cache-Control: max-age=$seconds");
+    }
+    //}}}
+    
+    protected function runFilter($type, $content)
+    {
+        if(!empty(self::$filters[$type])) {
+            foreach(self::$filters[$type] as $key=>$name) {
+                if(is_array(self::$filters[$type][$key])) {
+                    $content=call_user_func(self::$filters[$type][$key], $content, $this);
+                } else {
+                    $content=self::$filters[$type][$key]($content, $this);
+                }
+            }
+        }
+        return $content;
+    }
+    
+    protected function genContent()
     {
         if($file=$this->getFilePath()) {
             $content=file_get_contents($file);
-            $type='pre';
-            if(!empty(self::$filters[$type])) {
-                foreach(self::$filters[$type] as $key=>$name) {
-                    if(is_array(self::$filters[$type][$key])) {
-                        $content=call_user_func(self::$filters[$type][$key], $content, $this);
-                    } else {
-                        $content=self::$filters[$type][$key]($content, $this);
-                    }
-                }
-            }
+            $content=$this->runFilter("pre", $content);
             return $content;
         } else {
             throw new Exception("Resource \"$this->path\" not found.");
