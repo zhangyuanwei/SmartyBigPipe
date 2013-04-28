@@ -312,8 +312,8 @@ abstract class Resource
     public function getURL()
     {
         //return $this->path;
-        return '/rsrc.php?uri=' . urlencode($this->path);
-        //return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
+        //return '/rsrc.php?path=' . urlencode($this->path);
+        return '/rsrc.php?path='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
     }
     
     public function getDepends()

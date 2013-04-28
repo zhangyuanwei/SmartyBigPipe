@@ -33,7 +33,6 @@ __d("JSLoader",["Arbiter"],function(global, require, module, exports){
             appendToHead(element);
 
             function callback() {
-				console.log(self.url);
                 self.state = STAT_LOADED;
                 self.done("load");
             }

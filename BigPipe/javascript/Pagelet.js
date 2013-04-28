@@ -62,7 +62,7 @@ __d("Pagelet",["Arbiter","Resource"],function(global, require, module, exports){
                 }
             }
 
-            this._resolve(this.js, "jsresolved");
+            //this._resolve(this.js, "jsresolved");
         },
         _resolve: function(list, eventType) {
             var listCount, count, index, res;
@@ -91,7 +91,7 @@ __d("Pagelet",["Arbiter","Resource"],function(global, require, module, exports){
             this.state = STAT_DISPLAYED;
             getElementById(this.id).innerHTML = this.html;
             this.done("display");
-            //this.on("jsresolved", this.done, this, "load");
+            this.on("jsresolved", this.done, this, "load");
         }
     });
 

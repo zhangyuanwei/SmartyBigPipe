@@ -1,4 +1,4 @@
-__d("BigPipe",["Resource","Pagelet"],function(global, require, module, exports){
+__d("BigPipe", ["Resource", "Pagelet"], function(global, require, module, exports) {
     var Resource = require("Resource"),
         Pagelet = require("Pagelet"),
         inited = false;
@@ -54,7 +54,15 @@ __d("BigPipe",["Resource","Pagelet"],function(global, require, module, exports){
 
     return {
         init: init,
-        onPageletArrive: onPageletArrive
+        onPageletArrive: 
+		//*
+		onPageletArrive
+		//*/
+		/*
+		function(obj) {
+            nextTick(onPageletArrive, null, obj);
+        }
+		//*/
     };
 });
 /* __wrapped__ */

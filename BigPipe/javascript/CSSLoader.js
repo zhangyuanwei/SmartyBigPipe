@@ -1,11 +1,14 @@
-__d("CSSLoader",["Arbiter"],function(global, require, module, exports){
+__d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
     var Arbiter = require("Arbiter"),
         EVENT_TYPES = ["load"],
         STAT_INITIALIZED = 1,
         STAT_LOADING = 2,
         STAT_LOADED = 3,
         STAT_TIMEOUT = 4,
+        TIMEOUT = 5000,
         pulling = false,
+        styleSheetUrls = [],
+        styleSheetSet = [],
         cssMap = {},
         pullMap = {};
 
@@ -79,6 +82,11 @@ __d("CSSLoader",["Arbiter"],function(global, require, module, exports){
         startPull();
     }
 
+    function pullStyleSheetCallback(success) {
+        this.state = success ? STAT_LOADED : STAT_TIMEOUT;
+        this.done("load", success);
+    }
+
     function loadByCreateElement() {
         var id = this.id,
             url = this.url,
@@ -87,16 +95,30 @@ __d("CSSLoader",["Arbiter"],function(global, require, module, exports){
         link.type = "text/css";
         link.href = url;
         appendToHead(link);
-        pullStyleSheet(id, 3000, pullStyleSheetCallback, this);
-    }
-
-    function pullStyleSheetCallback(success) {
-        this.state = success ? STAT_LOADED : STAT_TIMEOUT;
-        this.done("load", success);
+        pullStyleSheet(id, TIMEOUT, pullStyleSheetCallback, this);
     }
 
     function loadByCreateStyleSheet() {
-        //TODO loadByCreateStyleSheet
+        var id = this.id,
+            url = this.url,
+            count = styleSheetUrls.length,
+            index = count,
+            stylesheet;
+        while (index--) {
+            if (styleSheetUrls[index].length < 31) {
+                stylesheet = styleSheetSet[index];
+                break;
+            }
+        }
+        if (index < 0) {
+            stylesheet = document.createStyleSheet();
+            styleSheetSet.push(stylesheet);
+            styleSheetUrls.push([]);
+            index = count;
+        }
+        stylesheet.addImport(url);
+        styleSheetUrls[index].push(url);
+        pullStyleSheet(id, TIMEOUT, pullStyleSheetCallback, this);
     }
 
     inherits(CSSLoader, Arbiter, {
@@ -106,8 +128,8 @@ __d("CSSLoader",["Arbiter"],function(global, require, module, exports){
                 this._load();
             }
         },
-        //_load: document.createStyleSheet ? loadByCreateStyleSheet : loadByCreateElement
-        _load: loadByCreateElement
+        _load: document.createStyleSheet ? loadByCreateStyleSheet : loadByCreateElement
+        //_load: loadByCreateElement
     });
 
 
