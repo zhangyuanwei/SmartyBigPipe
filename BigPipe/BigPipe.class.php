@@ -1,7 +1,7 @@
 <?php
 /** 
  *           File:  BigPipe.class.php
- *           Path:  ~/public_html/hao123/libs/BigPipe
+ *           Path:  BigPipe
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
  *       Modified:  2013-04-02 14:39:19  
@@ -12,7 +12,7 @@ if(!defined('BIGPIPE_BASE_DIR')) {
     define('BIGPIPE_BASE_DIR', dirname(__FILE__) . DIRECTORY_SEPARATOR);
 }
 
-define("BIGPIPE_DEBUG", 1);
+define("BIGPIPE_DEBUG", 0);
 
 abstract class BigPipe // BigPipe 流控制 {{{
 {
@@ -30,9 +30,9 @@ abstract class BigPipe // BigPipe 流控制 {{{
     const STAT_LOOP=2;
     const STAT_END=3;
     
-    const ATTR_PREFIX='ajax-';
+    const ATTR_PREFIX='bigpipe-';
     
-    protected static $ajaxKey='__ajax__';
+    protected static $ajaxKey='__bigpipe__';
     protected static $sessionKey='__session__';
     protected static $nojsKey='__noscript__';
     protected static $jsLib='/BigPipe/boot.js';
@@ -45,17 +45,19 @@ abstract class BigPipe // BigPipe 流控制 {{{
     private static $controller=null; // 输出控制器
     
     private static $savedAssertOptions=null; //保存的断言配置
+
+    private static $testHandler=null;//test标签的处理函数
     
-    public static final function getController() // 根据请求参数得到控制器 {{{
+    public static final function decideController() // 根据请求参数得到控制器 {{{
     {
-        $nojs=self::$nojsKey;
-        if(isset($_GET[$nojs])||isset($_COOKIE[$nojs])) {
-            setcookie($nojs, 1);
-            if(!class_exists("NoScriptController", false)) {
-                require(BIGPIPE_BASE_DIR . 'NoScriptController.class.php');
-            }
-            return new NoScriptController();
-        }
+        //$nojs=self::$nojsKey;
+        //if(isset($_GET[$nojs])||isset($_COOKIE[$nojs])) {
+        //    setcookie($nojs, 1);
+        //    if(!class_exists("NoScriptController", false)) {
+        //        require(BIGPIPE_BASE_DIR . 'NoScriptController.class.php');
+        //    }
+        //    return new NoScriptController();
+        //}
         
         $ajax=self::$ajaxKey;
         $session=self::$sessionKey;
@@ -82,7 +84,17 @@ abstract class BigPipe // BigPipe 流控制 {{{
     public static function getContext() // 得到当前上下文 {{{
     {
         return self::$context;
-    } // }}}
+	} // }}}
+
+	public static function getController(){ // 得到当前控制器 {{{
+		if(!isset(self::$controller)){
+			throw new Exception('controller is null');
+		}
+		return self::$controller;
+	} // }}}
+    public static function setTestHandler($handler){
+        self::$testHandler = $handler;
+    }
     // {{{ Smarty编译辅助函数
     public static final function compileParamsArray($params)
     {
@@ -96,7 +108,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
         $code.=")";
         return $code;
     }
-    
+
     public static final function compileParamsPlain($params)
     {
         $code="(\"";
@@ -183,7 +195,7 @@ abstract class BigPipe // BigPipe 流控制 {{{
 //            self::$globalVar=$config[$key];
 //        }
         
-        self::$controller=self::getController();
+        self::$controller=self::decideController();
         self::$state=self::STAT_FIRST;
         
         self::$context=new BigPipeContext(self::NONE);
@@ -193,9 +205,10 @@ abstract class BigPipe // BigPipe 流控制 {{{
     
     public static final function more() // {{{ 是否重复
     {
-        assert('self::$state === self::STAT_FIRST || self::$state === self::STAT_LOOP');
+		assert('self::$state === self::STAT_FIRST || self::$state === self::STAT_LOOP');
+		$controller = self::getController();
         
-        if(self::$controller->hasMore()) {
+        if($controller->hasMore()) {
             self::$state=self::STAT_LOOP;
             return true;
         } else {
@@ -210,10 +223,21 @@ abstract class BigPipe // BigPipe 流控制 {{{
         self::open($type, $config, $uniqid);
         self::close($type);
     } // }}}
-    
+    public static final function test($config,$template,$flag=false){
+        //决定是否需要渲染模板
+        if(isset(self::$testHandler)){
+            return call_user_func(self::$testHandler,$config,$template,$flag);
+        }
+        return true;
+    }
+    public static final function opened(){
+        return self::$context->opened;
+    }
     public static final function open($type, $config, $uniqid) // {{{ 打开某个标签
     {
-        assert('self::$state === self::STAT_FIRST || self::$state === self::STAT_LOOP');
+
+		assert('self::$state === self::STAT_FIRST || self::$state === self::STAT_LOOP');
+
         if(self::has($uniqid)) {
             $context=self::$context;
             assert('isset($context->children[$uniqid])');
@@ -227,7 +251,9 @@ abstract class BigPipe // BigPipe 流控制 {{{
         }
         
         self::$context=$context;
-        return $context->opened=self::$controller->openTag($context);
+		$controller = self::getController();
+
+        return $context->opened=$controller->openTag($context);
     } // }}}
     
     public static final function close($type) // {{{ 标签处理完后
@@ -236,7 +262,8 @@ abstract class BigPipe // BigPipe 流控制 {{{
         $context=self::$context;
         assert('$context->type === $type');
         
-        self::$controller->closeTag($context);
+		$controller = self::getController();
+        $controller->closeTag($context);
         $context->opened=false;
         
         $context=$context->parent;
@@ -458,6 +485,8 @@ class BigPipeContext // BigPipe上下文 {{{
     public $scriptLinks=null; // js 链接
     public $styles=null; // style内容
     public $styleLinks=null; // css 链接
+
+	public $shouldShow = false;
     
     public function __construct($type, $config=null)
     {

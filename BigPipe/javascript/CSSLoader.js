@@ -9,8 +9,9 @@ __d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
         pulling = false,
         styleSheetUrls = [],
         styleSheetSet = [],
-        cssMap = {},
-        pullMap = {};
+        pullMap = {},
+        pullClasses = [],
+        pullElement = null;
 
     function CSSLoader(id, config) {
         Arbiter.call(this, EVENT_TYPES);
@@ -19,24 +20,67 @@ __d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
         this.state = STAT_INITIALIZED;
     }
 
+    function getClassName(id) {
+        return "css_" + id;
+    }
+
+    function setAllClasses(classes) {
+        if (!pullElement) {
+            pullElement = document.createElement("meta");
+            appendToHead(pullElement);
+        }
+        pullClasses = classes || pullClasses;
+        pullElement.className = pullClasses.join(" ");
+    }
+
+    function addClass(cls) {
+        pullClasses.push(cls);
+        setAllClasses();
+    }
+
+    function clearAllClasses() {
+        pullClasses = [];
+        if (pullElement) {
+            pullElement.parentNode.removeChild(pullElement);
+            pullElement = null;
+        }
+    }
+
+    function checkClass(element) {
+        var style;
+        if (!element) return false;
+
+        style = window.getComputedStyle ? getComputedStyle(element, null) : element.currentStyle;
+        return (style && parseInt(style.height, 10) > 1);
+    }
+
     function doPullStyleSheet() {
-        var id, last, now, list, element, style, loaded, count, index, item;
+        var id, found, last, classes, change, now,
+            list, element, loaded,
+            count, index, item;
+
+        if (pullClasses.length > 2) {
+            found = checkClass(pullElement);
+        } else {
+            found = true;
+        }
+
         last = 0;
+        classes = []; // 还需要加载的class
+        change = false; // class列表是否有改变
         now = +new Date;
+
         for (id in pullMap) {
-            last++;
-            loaded = false;
             list = pullMap[id];
-            element = list[0];
-            style = window.getComputedStyle ? getComputedStyle(element, null) : element.currentStyle;
-            if (style && parseInt(style.height, 10) > 1) {
+            element = list[0]; //DOM元素
+            loaded = false; //是否加载成功
+
+            if (found && checkClass(element)) {
                 loaded = true;
             }
 
-            index = 0;
-            count = list.length;
-            while (++index < count) {
-                item = list[index];
+            for (index = 1, count = list.length; index < count; index++) {
+                item = list[index]; //回调 [timeout, callback, context]
                 if (loaded) {
                     item[1].call(item[2], true);
                 } else if (item[0] < now) {
@@ -48,15 +92,26 @@ __d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
             }
 
             if (loaded || count == 1) {
+                //如果已经载入或者全部超时，则不需要再pull
                 element.parentNode.removeChild(element);
                 delete pullMap[id];
-                last--;
+                // class列表有改变
+                change = true;
+            } else {
+                //否则记录需要pull的class
+                classes.push(getClassName(id));
+                last++;
             }
         }
 
+
         if (last) {
+            if (change) {
+                setAllClasses(classes);
+            }
             setTimeout(doPullStyleSheet, 20);
         } else {
+            clearAllClasses();
             pulling = false;
         }
     }
@@ -69,13 +124,15 @@ __d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
     }
 
     function pullStyleSheet(id, timeout, callback, context) {
-        var callbackList, element;
+        var callbackList, element, className;
         if (!(callbackList = pullMap[id])) {
+            className = getClassName(id);
             element = document.createElement("meta");
-            element.id = "css_" + id;
+            element.className = className;
             appendToHead(element);
             callbackList = [element];
             pullMap[id] = callbackList;
+            addClass(className);
         }
         timeout = (+new Date) + timeout;
         callbackList.push([timeout, callback, context]);
@@ -122,18 +179,18 @@ __d("CSSLoader", ["Arbiter"], function(global, require, module, exports) {
     }
 
     inherits(CSSLoader, Arbiter, {
-        load: function() {
-            if (this.state < STAT_LOADING) {
-                this.state = STAT_LOADING;
-                this._load();
-            }
-        },
-        _load: document.createStyleSheet ? loadByCreateStyleSheet : loadByCreateElement
-        //_load: loadByCreateElement
-    });
+            load: function() {
+                if (this.state < STAT_LOADING) {
+                    this.state = STAT_LOADING;
+                    this._load();
+                }
+            },
+            _load: document.createStyleSheet ? loadByCreateStyleSheet : loadByCreateElement
+            //_load: loadByCreateElement
+        });
 
 
     return CSSLoader;
 });
 /* __wrapped__ */
-/* @wrap false */
+/* @cmd false */

@@ -1,7 +1,7 @@
 <?php
 /** 
  *           File:  Resource.class.php
- *           Path:  ~/public_html/hao123/libs/Resource
+ *           Path:  Resource
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
  *       Modified:  2013-04-08 13:58:18  
@@ -11,21 +11,27 @@
 define('RESOURCES_BASE_DIR', dirname(__FILE__));
 define('RESOURCES_PLUGIN_DIR', RESOURCES_BASE_DIR . DIRECTORY_SEPARATOR . 'resources');
 
-abstract class Resource
+class Resource
 {
+	private static $fromMap = false;  //资源映射是否来源于内存
     private static $rootDirs=array(); //根目录
     private static $resourceHandlers=null; //处理器表
     private static $resourcesMap=array(); //资源映射表
     private static $idChars=null; //id可用的字符
-    private static $filters=array(); //过滤器
-    
-    private $path=null; //资源路径
+	
+	private $path=null; //资源路径
+	private $url = null; //资源请求地址
     private $content=null; //输出内容
-    private $depends=null; //依赖资源列表
+    private $depends=array(); //依赖资源列表
+	private $asyncModule = array();//异步模块列表
     private $id=null; //资源ID
+	private $type = null;
+	protected $cmd=true;//资源是否是业务层cmd
     
+
     //private $configHandlers=array('depend'=>'depend', 'import'=>'import');
 	private $configHandlers=array();
+	private $filters=array(); //过滤器
 	private $vars = array();
     
     // 静态方法	{{{
@@ -61,12 +67,12 @@ abstract class Resource
      * @access public
      * @return void
      */
-    public static function registerFilter($type, $callback)
+    protected function registerFilter($type, $callback)
     {
-        if(isset(self::$filters[$type])) {
-            self::$filters[$type][]=$callback;
+        if(isset($this->filters[$type])) {
+			$this->filters[$type][]=$callback;
         } else {
-            self::$filters[$type]=array(
+			$this->filters[$type]=array(
                 $callback
             );
         }
@@ -80,12 +86,16 @@ abstract class Resource
      * @access public
      * @return void
      */
-    public static function getResource($path)
+    public static function getResource($path,$content=null)
     {
         if(isset(self::$resourcesMap[$path])) {
             return self::$resourcesMap[$path];
         }
-        
+
+		if(!isset($content) && self::$fromMap){
+        	throw new Exception("No rsource path \"$path\" in map");
+		}
+			
         if(null===self::$resourceHandlers) {
             self::requireAllResourceHandlers();
         }
@@ -93,12 +103,59 @@ abstract class Resource
         foreach(self::$resourceHandlers as $pattern=>$handler) {
             if(preg_match($pattern, $path)) {
                 $res=new $handler($path);
+				if($content!==null)
+					$res->content = $res->runFilter("post",$content);
                 self::$resourcesMap[$path]=$res;
                 return $res;
             }
         }
         throw new Exception("No handler for path \"$path\"");
     } // }}}
+
+	/**
+	    * setResourceMap  设置资源表 
+	    * 
+	    * @param array $map 
+	    * @static
+	    * @access public
+	    * @return void
+	 */
+	public static function setResourceMap($map)
+	{
+		self::$fromMap = true;
+		$idMap = array();
+		$modMap = array();
+		foreach($map as $key=>$data)
+		{
+			$res=new Resource();
+			$res->id = $key;
+			$res->url = $data["url"];
+			$res->type = $data["type"];
+			$res->content = "";
+			$idMap[$key] = $res;
+			foreach($data["paths"] as $path)
+			{
+				self::$resourcesMap[$path] = $res;
+			}
+			foreach($data["define"] as $name)
+			{
+				$modMap[$name] = $res;
+			}
+				
+		}
+		foreach($map as $key=>$data)
+		{
+			$res = $idMap[$key];
+			foreach($data["mods"] as $name)
+			{
+				$res->asyncModule[$name] = $modMap[$name];
+			}
+			foreach($data["deps"] as $id)
+			{
+				$res->depends[$id] = $idMap[$id];
+			}
+		}
+	}
     
     /**
      * hasResource  资源是否存在 {{{
@@ -109,7 +166,10 @@ abstract class Resource
      * @return void
      */
     public static function hasResource($path)
-    {
+	{
+		if(self::$fromMap){
+		   return isset(self::$resourcesMap[$path]);
+		}
         return self::getResource($path)->exists();
     } // }}}
     
@@ -189,44 +249,88 @@ abstract class Resource
      * @access public
      * @return void
      */
-    public static function getDependResource($list, $reference=null)
+	public static function getDependResource($list, &$reference=null, &$modules=null, &$asyncs=null) 
     {
         $resolved=array();
-        $depends=array();
+	
+		//output
+		$asyncs=array();
+        $depends=array();		
+		$modules=array();
         
         $list=array_reverse($list);
         
-        while(!empty($list)) {
+		while(!empty($list)) {
+		/*	foreach($list as $id=>$res)
+			{
+				echo $res->getUrl()."|";
+			}
+			echo "\n";*/
             $res=end($list);
             $id=key($list);
-            
+
             if(isset($reference[$id])||isset($depends[$id])) { // 依赖列表中已经存在
                 array_pop($list);
                 continue;
             }
             
             if(isset($resolved[$id])) { // 依赖已经解决
-                $depends[$id]=$res;
+				$depends[$id]=$res;
+				$reference[$id]=$res;
+				unset($asyncs[$id]);
                 array_pop($list);
                 continue;
             }
             
-            $more=false; // 是否有未填加的依赖资源
-            foreach($res->getDepends() as $did=>$dep) {
+            $more=false; // 是否有未添加的依赖资源
+            foreach(array_reverse($res->getDepends()) as $did=>$dep) {
                 if(!isset($depends[$did])) {
                     unset($list[$did]);
                     $list[$did]=$dep;
                     $more=true;
                 }
-            }
-            
+			}
+
+			foreach($res->getAsyncModules() as $name=>$async)
+			{
+				$modules[$name] = $async;
+				$aid = $async->getId();
+				if(!isset($depends[$aid]))
+				{
+					$asyncs[$aid] = $async;
+				}
+			}
+
             if($more) {
                 $resolved[$id]=true;
             } else {
-                $depends[$id]=$res;
+				$depends[$id]=$res;
+				$reference[$id]=$res;
+				unset($asyncs[$id]);
                 array_pop($list);
             }
-        }
+		}
+		
+		reset($asyncs);
+		while(($res = current($asyncs))!==FALSE){
+			 foreach($res->getDepends() as $did=>$dep)
+			 {
+				if(!isset($depends[$did]) && !isset($asyncs[$did]))
+				{
+					$asyncs[$did] = $dep;
+				}
+			 }
+			 foreach($res->getAsyncModules() as $name=>$async)
+			 {
+				$modules[$name] = $async;
+				$aid = $async->getId();
+				if(!isset($depends[$aid]) && !isset($asyncs[$aid]))
+				{
+					$asyncs[$aid] = $async;
+				}
+			 }
+			 next($asyncs);
+		}
         return $depends;
     } // }}}
     
@@ -275,17 +379,26 @@ abstract class Resource
      * @access protected
      * @return void
      */
-    protected function __construct($path)
+    protected function __construct($path=null)
     {
-        if(substr($path, 0, 1)=='/') {
-			$this->path=$path;
-			$this->registerConfigHandler("depend", array($this, "depend"));
-			$this->registerConfigHandler("import", array($this, "import"));
-        } else {
-            throw new Exception("Resource path mast start whith\"\/\".");
-        }
+		if(isset($path))
+		{
+			if(substr($path, 0, 1)=='/') {
+				$this->path=$path;
+				$this->registerConfigHandler("depend", array($this, "depend"));
+				$this->registerConfigHandler("import", array($this, "import"));
+				$this->registerConfigHandler("cmd",   array($this,"cmd"));
+			} else {
+				throw new Exception("Resource path mast start whith\"\/\".");
+			}
+		}
     } // }}}
     
+	public function getType()
+	{
+		return $this->type;
+	}
+
     public function getPath()
     {
         return $this->path;
@@ -311,24 +424,29 @@ abstract class Resource
     
     public function getURL()
     {
-        //return $this->path;
-        //return '/rsrc.php?path=' . urlencode($this->path);
-        return '/rsrc.php?path='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
+        return $this->url!==null ? $this->url : $this->path."?".$this->getId();
+        //return '/rsrc.php?uri=' . urlencode($this->path);
+        //return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
     }
     
     public function getDepends()
     {
-        if(null===$this->depends) {
-            $this->depends=array();
-            $this->getContent();
-        }
+		if(empty($this->depends))
+			$this->getContent();
         return $this->depends;
     }
+
+	public function getAsyncModules()
+	{
+		if(empty($this->asyncModule))
+		    $this->getContent();
+		return $this->asyncModule;
+	}
     
     public function getContent()
     {
-        if(null===$this->content) {
-            $this->content=$this->genContent();
+        if(null===$this->content) {			
+			$this->content = $this->runFilter("post",$this->genContent());
         }
         return $this->content;
     }
@@ -366,6 +484,13 @@ abstract class Resource
         }
         return '/' . implode('/', $path);
     }
+
+	protected function nameToPath($name)
+	{
+		$path = str_replace(".","/",$name);
+		$path = "/".$path.".js";
+		return $path;
+	}
 
 	public function get($key, $default = null){
 		return isset($this->vars[$key]) ? $this->vars[$key] : $default;
@@ -436,6 +561,27 @@ abstract class Resource
             trigger_error("\"" . $this->path . "\" depend \"$path\" error:" . $e->getMessage());
         }
     } // }}}
+
+	/**
+	   * async 添加异步模块 {{{
+	   * 
+	   * @param mixed $name 
+	   * @param mixed $path 
+	   * @access protected
+	   * @return void
+	  */
+	protected function async($name, $path)
+	{
+		try
+		{
+			$res=self::getResource($this->getAbsolutPath($path));
+			$this->asyncModule[$name]=$res;
+		}
+		catch(Exception $e)
+		{
+			trigger_error("\"" . $this->path . "\" async \"$name\" error:" . $e->getMessage());
+		}
+	}// }}}
     
     /**
      * import 引入文件 {{{
@@ -454,6 +600,11 @@ abstract class Resource
             trigger_error("\"" . $this->path . "\" import \"$path\" error:" . $e->getMessage());
         }
     } // }}}
+
+	protected function cmd($cmd)
+	{
+		$this->cmd = $cmd;
+	}
     
     /**
      * expires 设置过期时间 {{{ 
@@ -472,12 +623,12 @@ abstract class Resource
     
     protected function runFilter($type, $content)
     {
-        if(!empty(self::$filters[$type])) {
-            foreach(self::$filters[$type] as $key=>$name) {
-                if(is_array(self::$filters[$type][$key])) {
-                    $content=call_user_func(self::$filters[$type][$key], $content, $this);
+		if(!empty($this->filters[$type])) {
+			foreach($this->filters[$type] as $callback) {
+				if(is_array($callback)) {
+					$content=call_user_func($callback, $content, $this);
                 } else {
-                    $content=self::$filters[$type][$key]($content, $this);
+					$content=$this->$callback($content, $this);
                 }
             }
         }

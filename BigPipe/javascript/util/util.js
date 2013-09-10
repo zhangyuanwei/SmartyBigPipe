@@ -1,4 +1,4 @@
-/* @wrap false */
+/* @cmd false */
 // @import 'cmd.js'
 // @import 'slice.js'
 // @import 'getElementById.js'
@@ -6,3 +6,17 @@
 // @import 'inherits.js'
 // @import 'nextTick.js'
 // @import 'appendToHead.js'
+// @import 'findParentByTagName.js'
+// @import 'trim.js'
+// @import 'filter.js'
+// @import 'getElementAttribute.js'
+// @import 'EventUtil.js'
+// @import 'documentCreateElement.js'
+// @import 'removeElement.js'
+// @import 'appendToBody.js'
+// @import 'each.js'
+// @import 'eachUtil.js'
+// @import 'inArray.js'
+// @import 'type.js'
+// @import 'isFunction.js'
+// @import 'queue.js'

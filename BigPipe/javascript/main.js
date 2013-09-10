@@ -8,9 +8,7 @@
  *
  *    __ignore__ 
  */
-/* @wrap false */
-"use strict";
-
+/* @cmd false */
 (function(global, window, document, undefined) {
     //@import 'util/util.js'
     //@import 'Arbiter.js'
@@ -19,9 +17,11 @@
     //@import 'BigPipe.js'
     //@import 'CSSLoader.js'
     //@import 'JSLoader.js'
-
+    //@import 'Emulator.js'
+    //@import 'Requestor.js'
+    //@import 'Controller.js'
     var _BigPipe = global["BigPipe"],
         BigPipe = require("BigPipe");
 
-    global["BigPipe"] = BigPipe;
+    global["BigPipe"] = new BigPipe();
 })(this, window, document);

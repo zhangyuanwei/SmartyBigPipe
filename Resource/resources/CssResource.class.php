@@ -1,19 +1,25 @@
 <?php
 
-Resource::registerHandler('/^.*\.css$/', 'CssResource');
+Resource::registerHandler('/^\/(common|widget|site)\/.*\.css$/', 'CssResource');
 
 class CssResource extends Resource
 {
-    protected function genContent()
-    {
-        $content=parent::genContent();
-        $content=preg_replace_callback('/\/\*(?<code>[\s\S]*?)\*\//m', array(
+	protected function __construct($path=null)
+	{
+		parent::__construct($path);
+		$this->registerFilter("post",array($this,'analyseComment'));
+	} 
+
+	protected function analyseComment($content)
+	{
+		$content=preg_replace_callback('/\/\*(?<code>[\s\S]*?)\*\//m', array(
             $this,
             'processComment'
         ), $content);
         
-        return $content;
-    }
+		return $content;
+	}
+
     
     private function processComment($matches)
     {
@@ -37,7 +43,7 @@ class CssResource extends Resource
         $contents=$this->getContent();
         if(false!==$contents) {
 			echo $contents, "\n";
-		    echo "#css_", $this->getId(), "{height:88px}";
+		    echo ".css_", $this->getId(), "{height:88px}";
         } else {
             header('HTTP/1.1 404 Not Found');
         }

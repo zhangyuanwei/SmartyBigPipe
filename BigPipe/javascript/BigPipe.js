@@ -1,69 +1,124 @@
-__d("BigPipe", ["Resource", "Pagelet"], function(global, require, module, exports) {
+__d("BigPipe", ["Resource", "Pagelet", "Emulator", "Arbiter", "Requestor"], function(global, require, module, exports) {
+
+    var DEBUG = false;
+
     var Resource = require("Resource"),
         Pagelet = require("Pagelet"),
+        Emulator = require("Emulator"),
+        Arbiter = require("Arbiter"),
+        Requestor = require("Requestor"),
         inited = false;
 
-    function getContentFromContainer(id, doc) {
-        var elem = getElementById(id, doc),
-            child, html;
-        if (!(child = elem.firstChild)) return null; //TODO
-        if (child.nodeType !== 8) return null; //TODO
-        html = child.nodeValue;
-        elem.parentNode.removeChild(elem);
-        html = html.slice(1, -1);
-        return html.replace(/--\\>/g, "-->");
+    function BigPige() {
+        Arbiter.call(this);
+        this.hooks = {};
     }
 
-    function getContent(obj) {
-        if (obj.content) return obj.content;
-        if (obj.container_id) return getContentFromContainer(obj.container_id, obj.doc);
-        return null;
-    }
+    inherits(BigPige, Arbiter, {
+            init: function(config) {
+                var me = this;
+                if (inited) throw new Error("BigPipe has been initialized.");
+                inited = true;
+                this.emulator = Emulator();
+                this.emulator.listen();
+                this.emulator.on("request", this.request, this);
+                this.requestor = new Requestor(config);
+                //this.requestor.on("arrive", handleArrive, this);
+                //            this.controller = new Controller();
 
-    function init() {
-        if (inited) throw new Error("BigPipe has been initialized.");
-        inited = true;
-    }
-
-    /**
-     * onPageletArrive 当页面区块到达时处理函数 {{{
-     * 
-     * @param obj {Object} Pagelet 信息
-     * @access public
-     * @return void
-     */
-    function onPageletArrive(obj) {
-        var id, parent, content, children, css, js, pagelet, hook, type, list, i, count;
-        if (!inited) init();
-        id = obj.id;
-        Resource.setResourceMap(obj.resource_map);
-        obj.html = getContent(obj);
-        pagelet = Pagelet(id);
-        if (hook = obj.hook) {
-            for (type in hook) {
-                list = hook[type];
-                count = list.length;
-                i = -1;
-                while (++i < count) {
-                    pagelet.on(type, new Function(list[i]), pagelet);
+                //            this.controller.on("arrived", this.onItemArrived, this);
+                //            this.on("allarrived", this.onSessionEnd, this);
+                if (DEBUG) {
+                    var left = true;
+                    this.console = documentCreateElement("ul", null, {
+                            cssText: 'position:fixed;_position:absolute;top:0;left:0;z-index:999;border:1px solid #ddd;border-bottom:none;font-family:monospace;background:#000;color:#dadada'
+                        });
+                    this.console.onmouseover = function() {
+                        if (left) {
+                            this.style.left = "auto";
+                            this.style.right = "0";
+                        } else {
+                            this.style.left = "0";
+                            this.style.right = "auto";
+                        }
+                        left = !left;
+                    };
+                    appendToBody(this.console);
                 }
-            }
-        }
-        pagelet.arrive(obj);
-    } // }}}
+            },
+            /**
+             * onPageletArrive 当页面区块到达时处理函数 {{{
+             * 
+             * @param obj {Object} Pagelet 信息
+             * @access public
+             * @return void
+             */
+            onPageletArrive: function(obj) {
+                var callback = obj.callback,
+                    hook, list, index, count, h, fn,
+                    hooks = this.hooks;
+                if (callback) {
+                    hook = obj.hook || {};
+                    for (var type in callback) {
+                        list = callback[type];
+                        index = -1;
+                        count = list.length;
+                        h = hook[type] || [];
+                        while (++index < count) {
+                            fn = list[index];
+                            h.push(hooks[fn]);
+                            delete hooks[fn];
+                        }
+                        hook[type] = h;
+                    }
+                    obj.hook = hook;
+                }
+                Resource.setResourceMap(obj.map || {});
+                Resource.setModuleMap(obj.mods || {});
 
-    return {
-        init: init,
-        onPageletArrive: 
-		//*
-		onPageletArrive
-		//*/
-		/*
-		function(obj) {
-            nextTick(onPageletArrive, null, obj);
-        }
-		//*/
-    };
+                this.requestor.arrive(obj);
+            }, // }}}
+            request: function(uri, ids) {
+                this.requestor.request(uri, ids);
+            },
+            sessionStart: function(id) {
+                this.requestor.start(id);
+            },
+            sessionEnd: function(id) {
+                this.requestor.end(id);
+            },
+            loadModule: function(name, callback) {
+                var resource = Resource.moudelToResource(name);
+                resource.on("resolve", callback);
+                resource.load();
+            },
+            loadedResource: function(obj) {
+                Resource.setResourceLoaded(obj);
+            },
+            log: function() {
+                if (!DEBUG) return;
+                var console = this.console,
+                    count, index, html, element;
+                if (!console) return;
+                for (index = 0, count = arguments.length, html = []; index < count; index++) {
+                    html.push(encodeHTML(String(arguments[index])));
+                }
+                console.appendChild(documentCreateElement("li", {
+                            innerHTML: html.join(' ')
+                        }, {
+                            cssText: "border-bottom:1px solid #ddd"
+                        }));
+            }
+        });
+
+    function encodeHTML(str) {
+        if (!str || 'string' != typeof str) return str;
+        return str.replace(/["'<>\\\/`]/g, function($0) {
+            return '&#' + $0.charCodeAt(0) + ';';
+        });
+    }
+
+    return BigPige;
 });
 /* __wrapped__ */
-/* @wrap false */
+/* @cmd false */

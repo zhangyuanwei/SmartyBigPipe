@@ -1,4 +1,4 @@
-/* @wrap false */
+/* @cmd false */
 
 function appendToHead(element) {
     var hardpoint,

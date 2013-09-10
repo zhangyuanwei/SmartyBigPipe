@@ -1,7 +1,7 @@
 <?php
 /** 
  *           File:  compiler.script.php
- *           Path:  ~/public_html/hao123/libs/BigPipe/plugins
+ *           Path:  BigPipe/plugins
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
  *       Modified:  2013-04-10 18:14:48  

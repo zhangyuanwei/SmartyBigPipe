@@ -1,7 +1,7 @@
 <?php
 /** 
  *           File:  compiler.link.php
- *           Path:  ~/public_html/hao123/libs/BigPipe/plugins
+ *           Path:  BigPipe/plugins
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
  *       Modified:  2013-04-11 11:30:19  

@@ -1,7 +1,7 @@
 <?php
 /** 
  *           File:  NoScriptController.class.php
- *           Path:  ~/public_html/hao123/libs/BigPipe
+ *           Path:  BigPipe
  *         Author:  zhangyuanwei
  *       Modifier:  zhangyuanwei
  *       Modified:  2013-03-28 18:52:53  

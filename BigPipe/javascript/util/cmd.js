@@ -1,4 +1,4 @@
-/* @wrap false */
+/* @cmd false */
 /** 
  *           File:  cmd.js
  *           Path:  BigPipe/javascript
@@ -23,18 +23,18 @@ function require(name) {
     if (!module) throw new Error('Requiring unknown module "' + name + '"');
     if (module.hasOwnProperty("exports")) return module.exports;
 
-    exports = module.exports = {};
+	module.exports = exports = {};
     deps = module.deps;
     count = deps.length;
     index = -1;
     args = [];
     while (++index < count) {
         dep = deps[index];
-        args.push(dep === "module" ? module : (dep === "exports" ? exports : require(deps[index])));
+        args.push(dep === "module" ? module : (dep === "exports" ? exports : require(dep)));
     }
 
-    if ((ret = module.factory.apply(this, args)) !== undefined) {
-        exports = module.exports = ret;
+    if ((ret = module.factory.apply(null, args)) !== undefined) {
+        module.exports = exports = ret;
     }
 
     return exports;
@@ -50,5 +50,5 @@ function __d(name, dependencies, factory) {
     return define(name, ['global', 'require', 'module', 'exports'].concat(dependencies), factory);
 }
 
-__b("global", this);
+__b("global", global);
 __b("require", require);

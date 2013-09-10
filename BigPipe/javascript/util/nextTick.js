@@ -1,4 +1,4 @@
-/* @wrap false */
+/* @cmd false */
 function nextTick() {
     var callbacks = [],
         timeoutID = null,
