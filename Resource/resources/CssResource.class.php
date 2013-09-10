@@ -1,6 +1,6 @@
 <?php
 
-Resource::registerHandler('/^\/(common|widget|site)\/.*\.css$/', 'CssResource');
+Resource::registerHandler('/^.*\.css$/', 'CssResource');
 
 class CssResource extends Resource
 {

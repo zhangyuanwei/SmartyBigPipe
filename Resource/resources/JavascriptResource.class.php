@@ -1,6 +1,6 @@
 <?php
 
-Resource::registerHandler('/^\/(((common|widget|site|libs)\/)|\.).*\.js$/', 'JavascriptResource');
+Resource::registerHandler('/^.*\.js$/', 'JavascriptResource');
 class JavascriptResource extends Resource
 {
 	private $requireModules = array();
