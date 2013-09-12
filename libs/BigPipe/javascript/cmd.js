@@ -1,7 +1,7 @@
 /*cmd业务框架实现*/
 /*@cmd false*/
 //@depend 'main.js'
-(function (global, BigPipe) {
+(function(global, BigPipe) {
 
     var _module_map = {},
         _waiting_map = {},
@@ -51,7 +51,7 @@
     function resolve(mod) {
         var flag = mod.flag,
             refs = mod.refs,
-			name = mod.name,
+            name = mod.name,
             index, count, mod;
 
         if (flag & FLG_AUTORUN) {
@@ -63,7 +63,7 @@
             for (index = 0, count = refs.length; index < count; index++) {
                 mod = _module_map[refs[index]];
                 if (mod && mod.waiting) {
-                    if (! --mod.waiting)
+                    if (!--mod.waiting)
                         resolve(mod);
                 }
             }
@@ -98,7 +98,11 @@
             args.push(dep === "module" ? module : (dep === "exports" ? exports : require(dep)));
         }
 
-        if ((ret = module.factory.apply(this, args)) !== undefined) {
+        ret = module.factory.apply(this, args);
+
+        if (module.exports !== exports) {
+            exports = module.exports;
+        } else if (ret !== undefined && ret !== exports) {
             module.exports = exports = ret;
         }
 
@@ -123,7 +127,7 @@
         }
 
         function onModuleLoaded() {
-            if (! --depCount) {
+            if (!--depCount) {
                 allReqiureLoaded();
             }
         }
@@ -149,8 +153,7 @@
         if (isReady) {
             define(anonymousModule(), dependencies, callback, FLG_AUTORUN);
             requireAsync(dependencies);
-        }
-        else {
+        } else {
             _lazy_modules.push([dependencies, callback]);
         }
     }
@@ -179,13 +182,13 @@
 
     // Cleanup functions for the document ready method
     if (document.addEventListener) {
-        DOMContentLoaded = function () {
+        DOMContentLoaded = function() {
             document.removeEventListener("DOMContentLoaded", DOMContentLoaded, false);
             ready();
         };
 
     } else if (document.attachEvent) {
-        DOMContentLoaded = function () {
+        DOMContentLoaded = function() {
             // Make sure body exists, at least, in case IE gets a little overzealous (ticket #5443).
             if (document.readyState === "complete") {
                 document.detachEvent("onreadystatechange", DOMContentLoaded);
