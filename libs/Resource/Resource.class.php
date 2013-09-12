@@ -14,7 +14,8 @@ define('RESOURCES_PLUGIN_DIR', RESOURCES_BASE_DIR . DIRECTORY_SEPARATOR . 'resou
 class Resource
 {
 	private static $fromMap = false;  //资源映射是否来源于内存
-    private static $rootDirs=array(); //根目录
+	private static $rootDirs=array(); //根目录
+	private static $generator=null; //生成器
     private static $resourceHandlers=null; //处理器表
     private static $resourcesMap=array(); //资源映射表
     private static $idChars=null; //id可用的字符
@@ -57,7 +58,11 @@ class Resource
             self::$rootDirs=$dirs;
         }
     } // }}}
-    
+  
+	public static function setURLGenerator($callback){
+		self::$generator = $callback;
+	}
+
     /**
      * registerFilter 注册过滤器 {{{
      * 
@@ -423,9 +428,13 @@ class Resource
     }
     
     public function getURL()
-    {
-        return $this->url!==null ? $this->url : $this->path."?".$this->getId();
-        //return '/rsrc.php?uri=' . urlencode($this->path);
+	{
+		if(!empty(self::$generator)){
+			return call_user_func(self::$generator, $this->path, $this);
+		}else{
+			return 'rsrc.php?uri=' . urlencode($this->path);
+		}
+        //return $this->url!==null ? $this->url : $this->path."?".$this->getId();
         //return '/rsrc.php?uri='.urlencode($this->path).'&v='.$this->getId().'.'.$this->getType();
     }
     
